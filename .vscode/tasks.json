@@ -1,0 +1,110 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Start Next.js development server",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"dev"
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Remove empty reset folders",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"rmdir \"src\\components\\dashboard\" \"src\\components\\ui\" \"src\\components\\views\" \"src\\components\" \"src\\app\\api\" \"src\\lib\""
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Inspect reset folders",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"for %D in (\"src\\components\\dashboard\" \"src\\components\\ui\" \"src\\components\\views\" \"src\\components\" \"src\\app\\api\" \"src\\lib\") do @echo ==== %~D & dir /a \"%~D\""
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Delete empty directories",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"rd /s /q \"src\\components\\dashboard\" & rd /s /q \"src\\components\\ui\" & rd /s /q \"src\\components\\views\" & rd /s /q \"src\\components\" & rd /s /q \"src\\app\\api\\setup\" & rd /s /q \"src\\app\\api\" & rd /s /q \"src\\lib\""
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Install bcrypt dependency",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"install"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Update bcrypt lockfile",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"install",
+				"bcryptjs@3.0.2",
+				"--package-lock-only",
+				"--ignore-scripts"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Install bcrypt package",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"install",
+				"bcryptjs@3.0.2",
+				"--no-package-lock",
+				"--ignore-scripts"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Run Phase 1 app",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"dev"
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Validate Phase 2 build",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"build"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}
