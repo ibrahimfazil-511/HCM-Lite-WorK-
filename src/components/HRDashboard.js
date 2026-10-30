@@ -181,9 +181,9 @@ export default function HRDashboard() {
         fetch("/api/announcements", { headers, cache: "no-store" }),
       ]);
 
-      if ([employeeResponse, attendanceResponse, leaveResponse].some((r) => r && (r.status === 401 || r.status === 403))) {
+      if ([employeeResponse, attendanceResponse, leaveResponse].some((r) => r && r.status === 401)) {
         localStorage.removeItem("hcm_token");
-        window.location.assign("/login");
+        window.location.assign("/login?redirect=/hr");
         return;
       }
 
@@ -475,16 +475,25 @@ export default function HRDashboard() {
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-800 antialiased font-sans">
+      {/* Mobile Drawer Backdrop Overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-slate-950/50 backdrop-blur-xs lg:hidden transition-opacity"
+          onClick={() => setMobileMenuOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* -------------------------------------------------------- */}
       {/* SIDEBAR NAVIGATION                                       */}
       {/* -------------------------------------------------------- */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-200/80 bg-white/95 backdrop-blur-md transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-64 max-w-[85vw] flex-col border-r border-slate-200/80 bg-white/95 backdrop-blur-md transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${
           mobileMenuOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
         }`}
       >
         {/* Brand / Logo */}
-        <div className="flex h-20 items-center justify-between px-6 border-b border-slate-100">
+        <div className="flex h-16 sm:h-20 items-center justify-between px-5 sm:px-6 border-b border-slate-100">
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-lg font-black text-white shadow-md shadow-violet-500/25">
               HR
@@ -496,7 +505,7 @@ export default function HRDashboard() {
           </div>
           <button
             onClick={() => setMobileMenuOpen(false)}
-            className="lg:hidden text-slate-400 hover:text-slate-600 p-1"
+            className="lg:hidden text-slate-400 hover:text-slate-600 p-2 text-base"
           >
             ✕
           </button>
@@ -586,20 +595,21 @@ export default function HRDashboard() {
       {/* -------------------------------------------------------- */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         {/* Top Floating App Bar */}
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200/80 bg-white/80 backdrop-blur-md px-4 sm:px-8">
-          <div className="flex items-center gap-3">
+        <header className="sticky top-0 z-30 flex h-16 sm:h-20 items-center justify-between border-b border-slate-200/80 bg-white/80 backdrop-blur-md px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden p-2 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100"
+              className="lg:hidden grid h-9 w-9 sm:h-10 sm:w-10 place-items-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 shrink-0"
+              title="Open Navigation"
             >
               ☰
             </button>
-            <h1 className="text-base font-bold text-slate-900 hidden sm:block">
+            <h1 className="text-sm sm:text-base font-bold text-slate-900 truncate">
               {HR_NAV_ITEMS.find((n) => n.id === active)?.label || "HR Workspace"}
             </h1>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {userRole === "ADMIN" && (
               <a
                 href="/dashboard"
@@ -611,10 +621,11 @@ export default function HRDashboard() {
 
             <button
               onClick={() => setAiModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 transition-all active:scale-95"
+              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-3 sm:px-3.5 py-1.5 sm:py-2 text-xs font-bold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 transition-all active:scale-95"
             >
               <IconSparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Ask Humi AI</span>
+              <span className="hidden xs:inline">Ask Humi AI</span>
+              <span className="xs:hidden">AI</span>
             </button>
 
             <button
@@ -629,36 +640,36 @@ export default function HRDashboard() {
         </header>
 
         {/* Global Feedback Notifications */}
-        <div className="px-4 sm:px-8 pt-4">
+        <div className="px-4 sm:px-6 lg:px-8 pt-4">
           {successMsg && (
-            <div className="mb-4 flex items-center justify-between rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-xs font-semibold text-emerald-800 shadow-xs animate-in fade-in">
+            <div className="mb-4 flex items-center justify-between rounded-xl sm:rounded-2xl bg-emerald-50 border border-emerald-200 p-3.5 sm:p-4 text-xs font-semibold text-emerald-800 shadow-xs animate-in fade-in">
               <div className="flex items-center gap-2.5">
                 <IconCheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>{successMsg}</span>
               </div>
-              <button onClick={() => setSuccessMsg("")} className="text-emerald-500 hover:text-emerald-800">✕</button>
+              <button onClick={() => setSuccessMsg("")} className="text-emerald-500 hover:text-emerald-800 p-1">✕</button>
             </div>
           )}
           {error && (
-            <div className="mb-4 flex items-center justify-between rounded-2xl bg-rose-50 border border-rose-200 p-4 text-xs font-semibold text-rose-800 shadow-xs animate-in fade-in">
+            <div className="mb-4 flex items-center justify-between rounded-xl sm:rounded-2xl bg-rose-50 border border-rose-200 p-3.5 sm:p-4 text-xs font-semibold text-rose-800 shadow-xs animate-in fade-in">
               <div className="flex items-center gap-2.5">
                 <IconAlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
                 <span>{error}</span>
               </div>
-              <button onClick={() => setError("")} className="text-rose-500 hover:text-rose-800">✕</button>
+              <button onClick={() => setError("")} className="text-rose-500 hover:text-rose-800 p-1">✕</button>
             </div>
           )}
         </div>
 
         {/* Main Content Workspace */}
-        <main className="flex-1 p-4 sm:p-8 space-y-6 max-w-7xl">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-6 max-w-7xl w-full mx-auto">
           {/* ---------------------------------------------------- */}
           {/* TAB 1: HR DASHBOARD & INSIGHTS (PDF Section 7)       */}
           {/* ---------------------------------------------------- */}
           {active === "Overview" && (
-            <div className="space-y-6">
+            <div className="space-y-5 sm:space-y-6">
               {/* Top KPI Cards (Section 7 Formula Compliance) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5 sm:gap-4">
                 <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
                   <div className="flex items-center justify-between text-slate-400">
                     <span className="text-[11px] font-bold uppercase tracking-wider">Total Headcount</span>
@@ -832,16 +843,16 @@ export default function HRDashboard() {
           {active === "Employees" && (
             <div className="space-y-4">
               {/* Header Action Surface */}
-              <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-3xl bg-white border border-slate-200/80 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-xs">
                 <div>
-                  <h2 className="text-base font-bold text-slate-900">Employee Directory & 360 Profiles</h2>
+                  <h2 className="text-base font-bold text-slate-900">Employee Directory &amp; 360 Profiles</h2>
                   <p className="text-xs text-slate-400">Register new staff, manage salaries, or import/export CSV</p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                   <button
                     onClick={() => setShowCsvModal(true)}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition flex-1 sm:flex-none"
                   >
                     <IconUpload className="w-3.5 h-3.5 text-indigo-600" />
                     <span>CSV Import</span>
@@ -849,7 +860,7 @@ export default function HRDashboard() {
 
                   <button
                     onClick={handleCsvExport}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition flex-1 sm:flex-none"
                   >
                     <IconDownload className="w-3.5 h-3.5 text-indigo-600" />
                     <span>Export</span>
@@ -857,7 +868,7 @@ export default function HRDashboard() {
 
                   <button
                     onClick={() => setShowAddEmployeeModal(true)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 transition active:scale-95"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 transition active:scale-95 w-full sm:w-auto"
                   >
                     <IconPlus className="w-3.5 h-3.5 text-white" />
                     <span>Hire / Add Employee</span>
@@ -967,22 +978,22 @@ export default function HRDashboard() {
           {/* ---------------------------------------------------- */}
           {active === "Attendance" && (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-3xl bg-white border border-slate-200/80 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-xs">
                 <div>
-                  <h2 className="text-base font-bold text-slate-900">Daily Attendance & Overtime Board</h2>
+                  <h2 className="text-base font-bold text-slate-900">Daily Attendance &amp; Overtime Board</h2>
                   <p className="text-xs text-slate-400">Real-time arrival, departure, 8.0h duty hours, and overtime earned</p>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 w-full sm:w-auto">
                   <input
                     type="date"
                     value={attendanceFilterDate}
                     onChange={(e) => setAttendanceFilterDate(e.target.value)}
-                    className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs text-slate-700 outline-none"
+                    className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs text-slate-700 outline-none flex-1 sm:flex-none"
                   />
                   <button
                     onClick={() => setAttendanceFilterDate(today)}
-                    className="rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200 transition"
+                    className="rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200 transition shrink-0"
                   >
                     Today
                   </button>
@@ -1062,12 +1073,12 @@ export default function HRDashboard() {
           {/* ---------------------------------------------------- */}
           {active === "Leave approvals" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-5 rounded-3xl bg-white border border-slate-200/80 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-xs">
                 <div>
                   <h2 className="text-base font-bold text-slate-900">Leave Requests Approval Inbox</h2>
                   <p className="text-xs text-slate-400">Review employee leave requests with optional approval/rejection remarks</p>
                 </div>
-                <span className="rounded-full bg-violet-100 text-violet-800 px-3 py-1 text-xs font-bold border border-violet-200">
+                <span className="rounded-full bg-violet-100 text-violet-800 px-3 py-1 text-xs font-bold border border-violet-200 self-start sm:self-auto">
                   {pendingLeaves.length} Pending Review
                 </span>
               </div>
@@ -1166,7 +1177,7 @@ export default function HRDashboard() {
           {/* ---------------------------------------------------- */}
           {active === "Payroll" && (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-3xl bg-white border border-slate-200/80 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-xs">
                 <div>
                   <h2 className="text-base font-bold text-slate-900">Monthly Payroll Preparation Workspace</h2>
                   <p className="text-xs text-slate-400">
@@ -1174,17 +1185,17 @@ export default function HRDashboard() {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
                   <input
                     type="month"
                     value={payrollMonth}
                     onChange={(e) => setPayrollMonth(e.target.value)}
-                    className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs text-slate-700 outline-none"
+                    className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs text-slate-700 outline-none flex-1 sm:flex-none"
                   />
                   <button
                     onClick={handleCreatePayrollDraft}
                     disabled={runningPayroll}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 transition active:scale-95 disabled:opacity-50"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 transition active:scale-95 disabled:opacity-50"
                   >
                     <IconPlus className="w-3.5 h-3.5" />
                     <span>{runningPayroll ? "Generating Draft..." : "Generate Payroll Draft"}</span>
@@ -1289,14 +1300,14 @@ export default function HRDashboard() {
           {/* ---------------------------------------------------- */}
           {active === "Announcements" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-5 rounded-3xl bg-white border border-slate-200/80 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-xs">
                 <div>
-                  <h2 className="text-base font-bold text-slate-900">Company Announcements & Broadcasts</h2>
+                  <h2 className="text-base font-bold text-slate-900">Company Announcements &amp; Broadcasts</h2>
                   <p className="text-xs text-slate-400">Post notices to all employees or specific departments</p>
                 </div>
                 <button
                   onClick={() => setShowAnnouncementModal(true)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 transition active:scale-95"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 transition active:scale-95"
                 >
                   <IconPlus className="w-3.5 h-3.5" />
                   <span>New Announcement</span>
@@ -1336,8 +1347,8 @@ export default function HRDashboard() {
       {/* ADD EMPLOYEE MODAL (Auto-Login Generation)               */}
       {/* -------------------------------------------------------- */}
       {showAddEmployeeModal && (
-        <Dialog open={showAddEmployeeModal} onOpenChange={setShowAddEmployeeModal}>
-          <div className="p-6 space-y-4">
+        <Dialog open={showAddEmployeeModal} onClose={() => setShowAddEmployeeModal(false)}>
+          <div className="space-y-4">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-slate-900">Hire New Employee &amp; Create Login</DialogTitle>
             </DialogHeader>
@@ -1367,7 +1378,7 @@ export default function HRDashboard() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label>Department *</Label>
                   <Select
@@ -1390,7 +1401,7 @@ export default function HRDashboard() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label>Basic Salary (PKR) *</Label>
                   <Input
@@ -1422,11 +1433,11 @@ export default function HRDashboard() {
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3">
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <Button type="button" variant="outline" onClick={() => setShowAddEmployeeModal(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={submittingEmployee} className="bg-violet-600 hover:bg-violet-500 text-white font-bold">
+                <Button type="submit" disabled={submittingEmployee} className="bg-violet-600 hover:bg-violet-500 text-white font-bold w-full sm:w-auto">
                   {submittingEmployee ? "Hiring Employee..." : "Hire Employee & Save in Supabase"}
                 </Button>
               </div>
@@ -1439,8 +1450,8 @@ export default function HRDashboard() {
       {/* EDIT EMPLOYEE MODAL                                      */}
       {/* -------------------------------------------------------- */}
       {showEditEmployeeModal && editingEmployee && (
-        <Dialog open={showEditEmployeeModal} onOpenChange={setShowEditEmployeeModal}>
-          <div className="p-6 space-y-4">
+        <Dialog open={showEditEmployeeModal} onClose={() => setShowEditEmployeeModal(false)}>
+          <div className="space-y-4">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-slate-900">Edit Employee 360 Profile</DialogTitle>
             </DialogHeader>
@@ -1455,7 +1466,7 @@ export default function HRDashboard() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label>Department</Label>
                   <Select
@@ -1477,7 +1488,7 @@ export default function HRDashboard() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label>Basic Salary (PKR)</Label>
                   <Input
@@ -1504,11 +1515,11 @@ export default function HRDashboard() {
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3">
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <Button type="button" variant="outline" onClick={() => setShowEditEmployeeModal(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={submittingEmployee} className="bg-violet-600 hover:bg-violet-500 text-white">
+                <Button type="submit" disabled={submittingEmployee} className="bg-violet-600 hover:bg-violet-500 text-white w-full sm:w-auto">
                   {submittingEmployee ? "Saving..." : "Save Changes"}
                 </Button>
               </div>
@@ -1521,8 +1532,8 @@ export default function HRDashboard() {
       {/* CSV IMPORT MODAL (Dry Run Validator)                     */}
       {/* -------------------------------------------------------- */}
       {showCsvModal && (
-        <Dialog open={showCsvModal} onOpenChange={setShowCsvModal}>
-          <div className="p-6 space-y-4">
+        <Dialog open={showCsvModal} onClose={() => setShowCsvModal(false)} className="max-w-2xl">
+          <div className="space-y-4">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-slate-900">Bulk Employee CSV Import</DialogTitle>
             </DialogHeader>
@@ -1554,7 +1565,7 @@ export default function HRDashboard() {
               </div>
             )}
 
-            <div className="flex items-center justify-end gap-2 pt-3">
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-slate-100">
               <Button type="button" variant="outline" onClick={() => setShowCsvModal(false)}>Cancel</Button>
               <Button
                 type="button"
@@ -1581,8 +1592,8 @@ export default function HRDashboard() {
       {/* ANNOUNCEMENT MODAL                                       */}
       {/* -------------------------------------------------------- */}
       {showAnnouncementModal && (
-        <Dialog open={showAnnouncementModal} onOpenChange={setShowAnnouncementModal}>
-          <div className="p-6 space-y-4">
+        <Dialog open={showAnnouncementModal} onClose={() => setShowAnnouncementModal(false)}>
+          <div className="space-y-4">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-slate-900">Broadcast Announcement</DialogTitle>
             </DialogHeader>
@@ -1621,9 +1632,9 @@ export default function HRDashboard() {
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3">
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <Button type="button" variant="outline" onClick={() => setShowAnnouncementModal(false)}>Cancel</Button>
-                <Button type="submit" disabled={submittingAnnouncement} className="bg-violet-600 hover:bg-violet-500 text-white">
+                <Button type="submit" disabled={submittingAnnouncement} className="bg-violet-600 hover:bg-violet-500 text-white w-full sm:w-auto">
                   {submittingAnnouncement ? "Publishing..." : "Publish to Team"}
                 </Button>
               </div>
@@ -1636,8 +1647,8 @@ export default function HRDashboard() {
       {/* PAYSLIP DETAIL MODAL                                     */}
       {/* -------------------------------------------------------- */}
       {activePayslip && (
-        <Dialog open={Boolean(activePayslip)} onOpenChange={() => setActivePayslip(null)}>
-          <div className="p-6 space-y-4 max-w-lg">
+        <Dialog open={Boolean(activePayslip)} onClose={() => setActivePayslip(null)} className="max-w-lg">
+          <div className="space-y-4">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-slate-900">Official Payslip Details</DialogTitle>
             </DialogHeader>
@@ -1678,7 +1689,7 @@ export default function HRDashboard() {
             </div>
 
             <div className="flex justify-end">
-              <Button onClick={() => setActivePayslip(null)} className="bg-slate-800 text-white">Close</Button>
+              <Button onClick={() => setActivePayslip(null)} className="bg-slate-800 text-white w-full sm:w-auto">Close</Button>
             </div>
           </div>
         </Dialog>

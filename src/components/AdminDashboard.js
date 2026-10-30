@@ -229,9 +229,9 @@ export default function AdminDashboard() {
         fetch("/api/supabase/status", { cache: "no-store" }).catch(() => null),
       ]);
 
-      if ([employeeResponse, attendanceResponse, leaveResponse].some((r) => r && (r.status === 401 || r.status === 403))) {
+      if ([employeeResponse, attendanceResponse, leaveResponse].some((r) => r && r.status === 401)) {
         localStorage.removeItem("hcm_token");
-        window.location.assign("/login");
+        window.location.assign("/login?redirect=/dashboard");
         return;
       }
 
@@ -546,16 +546,25 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-800 antialiased font-sans">
+      {/* Mobile Drawer Backdrop Overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-slate-950/50 backdrop-blur-xs lg:hidden transition-opacity"
+          onClick={() => setMobileMenuOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* -------------------------------------------------------- */}
       {/* SIDEBAR NAVIGATION                                       */}
       {/* -------------------------------------------------------- */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-200/80 bg-white/95 backdrop-blur-md transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-64 max-w-[85vw] flex-col border-r border-slate-200/80 bg-white/95 backdrop-blur-md transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${
           mobileMenuOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
         }`}
       >
         {/* Brand / Logo */}
-        <div className="flex h-20 items-center justify-between px-6 border-b border-slate-100">
+        <div className="flex h-16 sm:h-20 items-center justify-between px-5 sm:px-6 border-b border-slate-100">
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-lg font-black text-white shadow-md shadow-indigo-500/25">
               H
@@ -567,7 +576,7 @@ export default function AdminDashboard() {
           </div>
           <button
             onClick={() => setMobileMenuOpen(false)}
-            className="lg:hidden text-slate-400 hover:text-slate-600 p-1"
+            className="lg:hidden text-slate-400 hover:text-slate-600 p-2 text-base"
           >
             ✕
           </button>
@@ -696,37 +705,37 @@ export default function AdminDashboard() {
       {/* -------------------------------------------------------- */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         {/* Top Header Navbar */}
-        <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-slate-200/80 bg-white/90 px-6 sm:px-8 backdrop-blur-md">
-          <div className="flex items-center gap-4">
+        <header className="sticky top-0 z-30 flex h-16 sm:h-20 items-center justify-between border-b border-slate-200/80 bg-white/90 px-4 sm:px-6 lg:px-8 backdrop-blur-md">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100"
+              className="lg:hidden grid h-9 w-9 sm:h-10 sm:w-10 place-items-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 shrink-0"
+              title="Open Navigation"
             >
               ☰
             </button>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-400">Console</span>
-              <span className="text-slate-300">/</span>
-              <span className="font-bold text-slate-800">{active}</span>
+            <div className="flex items-center gap-1.5 sm:gap-2 text-xs min-w-0 truncate">
+              <span className="text-slate-400 hidden xs:inline">Console</span>
+              <span className="text-slate-300 hidden xs:inline">/</span>
+              <span className="font-bold text-slate-800 truncate">{active}</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <a
-              href="/hr"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition shadow-xs"
-              title="Open HR Workspace"
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div
+              className="hidden md:inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 px-3 py-1.5 text-xs font-bold text-indigo-700 shadow-xs"
+              title="Administrator Role Active"
             >
               <IconShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
-              HR Workspace →
-            </a>
+              Role: Admin
+            </div>
 
             <Button
               variant="outline"
               size="sm"
               onClick={handleSummarize}
               disabled={loadingSummary}
-              className="hidden sm:inline-flex"
+              className="hidden lg:inline-flex"
             >
               <IconSparkles className="h-3.5 w-3.5 text-indigo-600" />
               {loadingSummary ? "Summarizing..." : "AI Summarize"}
@@ -736,17 +745,18 @@ export default function AdminDashboard() {
               variant="gradient"
               size="sm"
               onClick={() => setAiModalOpen(true)}
-              className="shadow-indigo-500/25"
+              className="shadow-indigo-500/25 px-2.5 sm:px-3.5"
             >
               <IconSparkles className="h-3.5 w-3.5 text-white" />
-              Ask Humi AI
+              <span className="hidden xs:inline">Ask Humi AI</span>
+              <span className="xs:hidden">AI</span>
             </Button>
 
-            <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block" />
+            <div className="h-4 w-px bg-slate-200 mx-0.5 sm:mx-1 hidden xs:block" />
 
             <button
               onClick={() => setActive("Leave requests")}
-              className="relative grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition"
+              className="relative grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition shrink-0"
               title="Pending leave notifications"
             >
               <IconCalendar className="h-4 w-4" />
@@ -760,14 +770,14 @@ export default function AdminDashboard() {
         </header>
 
         {/* Scrollable Content Body */}
-        <main className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 max-w-7xl w-full mx-auto">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-6 max-w-7xl w-full mx-auto">
           {/* Welcome & Date Banner */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div>
               <span className="text-xs font-semibold text-slate-400">
                 {now ? new Intl.DateTimeFormat("en", { dateStyle: "full" }).format(now) : "Welcome"}
               </span>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 mt-0.5">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 mt-0.5">
                 Good morning, Mohammad 👋
               </h1>
               <p className="text-xs text-slate-500 mt-1">
@@ -775,13 +785,13 @@ export default function AdminDashboard() {
               </p>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 w-full sm:w-auto">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={loadDashboard}
                 disabled={loading}
-                className="shadow-xs"
+                className="w-full sm:w-auto shadow-xs justify-center"
               >
                 <IconRefreshCw className={`h-3.5 w-3.5 text-slate-500 ${loading ? "animate-spin" : ""}`} />
                 Refresh Data
@@ -2320,16 +2330,16 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 p-4 text-white shadow-md">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 p-3.5 sm:p-4 text-white shadow-md">
               <div>
                 <span className="block text-[10px] uppercase tracking-wider text-indigo-100 font-semibold">Net Pay Transferred</span>
-                <strong className="text-2xl font-black">{activePayslip.netPay.toLocaleString()} PKR</strong>
+                <strong className="text-xl sm:text-2xl font-black">{activePayslip.netPay.toLocaleString()} PKR</strong>
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => window.print()}
-                className="bg-white text-indigo-700 hover:bg-slate-50 border-0"
+                className="w-full sm:w-auto bg-white text-indigo-700 hover:bg-slate-50 border-0"
               >
                 Print Payslip 🖨
               </Button>

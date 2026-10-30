@@ -24,8 +24,12 @@ export default function HRPage() {
   useEffect(() => {
     const identity = getClientIdentity();
     if (!identity) {
-      clearClientSession();
       window.location.replace("/login?redirect=/hr");
+      return;
+    }
+
+    if (identity.role === "ADMIN") {
+      window.location.replace("/dashboard");
       return;
     }
 
@@ -34,8 +38,7 @@ export default function HRPage() {
       return;
     }
 
-    if (!["HR", "ADMIN"].includes(identity.role)) {
-      clearClientSession();
+    if (identity.role !== "HR") {
       window.location.replace("/login?redirect=/hr");
       return;
     }

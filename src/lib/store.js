@@ -1,9 +1,26 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
 import { supabaseGet, supabaseUpsert, supabaseConfig } from "./supabase.js";
 
-const dataDirectory = path.join(process.cwd(), "data");
-const dataFile = path.join(dataDirectory, "hcm.json");
+// Primary project data paths
+const projectDataDir = path.join(process.cwd(), "data");
+const projectDataFile = path.join(projectDataDir, "hcm.json");
+
+// Serverless / Lambda / Vercel fallback writable path in /tmp
+const tmpDataDir = path.join(os.tmpdir(), "hcm-data");
+const tmpDataFile = path.join(tmpDataDir, "hcm.json");
+
+// Detect serverless environment (Vercel, AWS Lambda, or /var/task read-only filesystem)
+const isServerless = Boolean(
+  process.env.VERCEL ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.LAMBDA_TASK_ROOT ||
+  (typeof process.cwd === "function" && (process.cwd().startsWith("/var/task") || process.cwd() === "/"))
+);
+
+// In-memory runtime cache for serverless containers
+let memoryStore = null;
 
 const emptyStore = {
   configured: false,
@@ -21,36 +38,85 @@ const emptyStore = {
   aiLogs: [],
 };
 
-async function readLocalStore() {
-  await mkdir(dataDirectory, { recursive: true });
+function parseOrRepairJson(raw) {
+  if (!raw || typeof raw !== "string") return null;
   try {
-    const raw = await readFile(dataFile, "utf8");
     return JSON.parse(raw);
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      await writeFile(dataFile, JSON.stringify(emptyStore, null, 2), "utf8");
-      return structuredClone(emptyStore);
-    }
+  } catch {
     // Self-healing: if file has trailing junk after final '}', trim and repair
-    try {
-      const raw = await readFile(dataFile, "utf8");
-      const lastBrace = raw.lastIndexOf("}");
-      if (lastBrace !== -1) {
-        const cleaned = raw.slice(0, lastBrace + 1);
-        const parsed = JSON.parse(cleaned);
-        await writeFile(dataFile, JSON.stringify(parsed, null, 2), "utf8");
-        return parsed;
+    const lastBrace = raw.lastIndexOf("}");
+    if (lastBrace !== -1) {
+      try {
+        return JSON.parse(raw.slice(0, lastBrace + 1));
+      } catch {
+        return null;
       }
-    } catch {
-      // Fallback to empty store if unrecoverable
     }
-    return structuredClone(emptyStore);
+    return null;
   }
 }
 
+async function readLocalStore() {
+  if (memoryStore) {
+    return structuredClone(memoryStore);
+  }
+
+  // 1. Try reading from bundled project file (data/hcm.json) without calling mkdir
+  try {
+    const raw = await readFile(projectDataFile, "utf8");
+    const parsed = parseOrRepairJson(raw);
+    if (parsed) {
+      memoryStore = parsed;
+      return structuredClone(parsed);
+    }
+  } catch {
+    // File doesn't exist or is not readable in current working dir (e.g. serverless)
+  }
+
+  // 2. Try reading from /tmp fallback
+  try {
+    const raw = await readFile(tmpDataFile, "utf8");
+    const parsed = parseOrRepairJson(raw);
+    if (parsed) {
+      memoryStore = parsed;
+      return structuredClone(parsed);
+    }
+  } catch {
+    // /tmp file doesn't exist yet
+  }
+
+  // 3. Fallback to empty store
+  memoryStore = structuredClone(emptyStore);
+  return structuredClone(emptyStore);
+}
+
 async function writeLocalStore(store) {
-  await mkdir(dataDirectory, { recursive: true });
-  await writeFile(dataFile, JSON.stringify(store, null, 2), "utf8");
+  // Always update in-memory cache first
+  memoryStore = structuredClone(store);
+
+  // In local development, write to project data directory
+  // When running on Vercel / AWS Lambda (/var/task), the filesystem is read-only.
+  // NEVER attempt mkdir on /var/task/data!
+  if (!isServerless) {
+    try {
+      await mkdir(projectDataDir, { recursive: true });
+      await writeFile(projectDataFile, JSON.stringify(store, null, 2), "utf8");
+      return store;
+    } catch {
+      // Fallback to /tmp if project directory is not writable
+    }
+  }
+
+  // Fallback: write to /tmp (always writable in serverless environments)
+  try {
+    await mkdir(tmpDataDir, { recursive: true });
+    await writeFile(tmpDataFile, JSON.stringify(store, null, 2), "utf8");
+  } catch (err) {
+    // Even if /tmp fails for some reason, do NOT throw an exception.
+    // memoryStore and Supabase Cloud Database guarantee data persistence.
+    console.warn("[HCM Store] Local filesystem write skipped in serverless environment:", err.message);
+  }
+
   return store;
 }
 
@@ -294,7 +360,13 @@ function unmapPayroll(p) {
  * Prefers Supabase live data; falls back to local cache gracefully.
  */
 export async function readStore() {
-  const local = await readLocalStore();
+  let local;
+  try {
+    local = await readLocalStore();
+  } catch (err) {
+    console.warn("[HCM Store] Local store read warning:", err.message);
+    local = structuredClone(emptyStore);
+  }
 
   if (supabaseConfig.isConfigured) {
     try {
@@ -387,8 +459,12 @@ export async function readStore() {
  * Persists locally and automatically pushes sanitized, schema-compliant rows to Supabase tables.
  */
 export async function writeStore(store) {
-  // 1. Write locally first to ensure instant response & zero loss
-  await writeLocalStore(store);
+  // 1. Write locally / update memory store safely without throwing
+  try {
+    await writeLocalStore(store);
+  } catch (err) {
+    console.warn("[HCM Store] writeLocalStore warning:", err.message);
+  }
 
   // 2. Synchronize to Supabase Cloud Database with schema-matched sanitization
   if (supabaseConfig.isConfigured) {

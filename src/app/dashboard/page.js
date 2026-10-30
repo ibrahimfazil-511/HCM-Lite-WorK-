@@ -24,7 +24,6 @@ export default function DashboardPage() {
   useEffect(() => {
     const identity = getClientIdentity();
     if (!identity) {
-      clearClientSession();
       window.location.replace("/login?redirect=/dashboard");
       return;
     }
@@ -37,7 +36,6 @@ export default function DashboardPage() {
       return;
     }
     if (identity.role !== "ADMIN") {
-      clearClientSession();
       window.location.replace("/login?redirect=/dashboard");
       return;
     }

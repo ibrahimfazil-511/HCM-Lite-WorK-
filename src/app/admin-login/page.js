@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { safeResponseJson } from "../../lib/api.js";
+import { setClientSession } from "../../lib/client-auth.js";
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [selectedRole, setSelectedRole] = useState("ADMIN");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -17,7 +19,12 @@ export default function AdminLoginPage() {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+          role: selectedRole,
+          portal: selectedRole === "HR" ? "/hr" : "/dashboard",
+        }),
       });
 
       const result = await safeResponseJson(response, {});
@@ -33,14 +40,13 @@ export default function AdminLoginPage() {
         throw new Error("Failed to receive authentication session token.");
       }
 
-      window.localStorage.setItem("hcm_token", result.token);
+      setClientSession(result.token, result.user);
       if (result.user.role === "HR") {
         window.location.assign("/hr");
       } else {
         window.location.assign("/dashboard");
       }
     } catch (loginError) {
-      window.localStorage.removeItem("hcm_token");
       setError(loginError.message || "An error occurred while signing in.");
     } finally {
       setLoading(false);
@@ -58,6 +64,22 @@ export default function AdminLoginPage() {
         <p className="login-eyebrow">ADMIN CONTROL CENTER</p>
         <h1>Secure admin access</h1>
         <p className="login-subtitle">This panel is available only to authorized Admin and HR accounts.</p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "16px" }}>
+          <button
+            type="button"
+            onClick={() => { setEmail("admin@example.com"); setPassword("Admin123!"); setSelectedRole("ADMIN"); }}
+            style={{ flex: "1 1 140px", padding: "8px 10px", fontSize: "11px", fontWeight: "bold", background: selectedRole === "ADMIN" ? "#c7d2fe" : "#f0f4ff", border: "1px solid #a5b4fc", color: "#312e81", borderRadius: "8px", cursor: "pointer" }}
+          >
+            👑 Admin Demo
+          </button>
+          <button
+            type="button"
+            onClick={() => { setEmail("admin@example.com"); setPassword("Admin123!"); setSelectedRole("HR"); }}
+            style={{ flex: "1 1 140px", padding: "8px 10px", fontSize: "11px", fontWeight: "bold", background: selectedRole === "HR" ? "#f5d0fe" : "#fdf4ff", border: "1px solid #e879f9", color: "#701a75", borderRadius: "8px", cursor: "pointer" }}
+          >
+            👥 HR Demo (Shared)
+          </button>
+        </div>
         <label>
           Email address
           <input

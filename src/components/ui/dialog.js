@@ -2,32 +2,37 @@
 
 import { useEffect } from "react";
 
-export function Dialog({ open, onClose, children, className = "" }) {
+export function Dialog({ open, onClose, onOpenChange, children, className = "" }) {
+  const handleClose = () => {
+    if (onClose) onClose();
+    if (onOpenChange) onOpenChange(false);
+  };
+
   useEffect(() => {
     function handleKeyDown(e) {
-      if (e.key === "Escape" && open && onClose) {
-        onClose();
+      if (e.key === "Escape" && open) {
+        handleClose();
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open, onClose]);
+  }, [open, onClose, onOpenChange]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
       {/* Backdrop with frosted glass effect */}
       <div
-        className="fixed inset-0 bg-slate-950/40 backdrop-blur-md transition-opacity duration-200 animate-in fade-in"
-        onClick={onClose}
+        className="fixed inset-0 bg-slate-950/50 backdrop-blur-xs transition-opacity duration-200 animate-in fade-in"
+        onClick={handleClose}
       />
 
       {/* Modal Dialog Content */}
       <div
         role="dialog"
         aria-modal="true"
-        className={`relative z-50 w-full max-w-lg rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-7 shadow-2xl transition-all duration-200 animate-in fade-in zoom-in-95 ${className}`}
+        className={`relative z-50 w-full max-w-lg max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto my-auto rounded-2xl sm:rounded-3xl border border-slate-200/80 bg-white p-4 sm:p-6 md:p-7 shadow-2xl transition-all duration-200 animate-in fade-in zoom-in-95 ${className}`}
       >
         {children}
       </div>

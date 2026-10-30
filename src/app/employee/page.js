@@ -83,7 +83,6 @@ export default function EmployeePage() {
       }
       const identity = getClientIdentity();
       if (!identity) {
-        clearClientSession();
         window.location.assign("/login?redirect=/employee");
         return;
       }
@@ -96,7 +95,6 @@ export default function EmployeePage() {
         return;
       }
       if (identity.role !== "EMPLOYEE") {
-        clearClientSession();
         window.location.assign("/login?redirect=/employee");
         return;
       }
@@ -110,9 +108,9 @@ export default function EmployeePage() {
         fetch("/api/analytics/dashboard", { headers, cache: "no-store" }),
       ]);
 
-      if ([attRes, leaveRes, payRes, empRes, dashRes].some((response) => response && (response.status === 401 || response.status === 403))) {
+      if ([attRes, leaveRes, payRes, empRes, dashRes].some((response) => response && response.status === 401)) {
         clearClientSession();
-        window.location.assign("/login");
+        window.location.assign("/login?redirect=/employee");
         return;
       }
 
@@ -274,74 +272,107 @@ export default function EmployeePage() {
 
   return (
     <main className="min-h-screen bg-slate-50/70 text-slate-900 font-sans selection:bg-indigo-500 selection:text-white">
-      {/* Frosted Glass Top Navigation */}
-      <header className="sticky top-0 z-40 flex items-center justify-between h-16 px-4 sm:px-8 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl">
-        <div className="flex items-center gap-3">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-lg font-black text-white shadow-md shadow-indigo-500/20">
+      {/* Frosted Glass Top Navigation Header */}
+      <header className="sticky top-0 z-40 flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <span className="grid h-9 w-9 sm:h-10 sm:w-10 place-items-center rounded-xl sm:rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-lg sm:text-xl font-black text-white shadow-md shadow-indigo-500/20 shrink-0">
             h
           </span>
           <div>
-            <strong className="text-sm font-extrabold tracking-tight text-slate-900 block leading-tight">HCM Lite</strong>
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Employee Portal</span>
+            <div className="flex items-center gap-1.5">
+              <strong className="text-sm sm:text-base font-extrabold tracking-tight text-slate-900 block leading-tight">HCM Lite</strong>
+              <span className="rounded-full bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 text-[9px] font-bold text-emerald-700 sm:inline-block hidden">Portal</span>
+            </div>
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest block">Employee Desk</span>
           </div>
         </div>
 
-        {/* Tab Navigation Pill Bar */}
-        <div className="flex items-center gap-2 sm:gap-4">
-          <nav className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600">
-            <button
-              onClick={() => setTab("attendance")}
-              className={`rounded-lg px-3 py-1.5 transition-all duration-150 ${tab === "attendance" ? "bg-white text-indigo-600 shadow-xs font-bold" : "hover:text-slate-900"}`}
-            >
-              Attendance
-            </button>
-            <button
-              onClick={() => setTab("leaves")}
-              className={`rounded-lg px-3 py-1.5 transition-all duration-150 ${tab === "leaves" ? "bg-white text-indigo-600 shadow-xs font-bold" : "hover:text-slate-900"}`}
-            >
-              Leaves
-            </button>
-            <button
-              onClick={() => setTab("payslips")}
-              className={`rounded-lg px-3 py-1.5 transition-all duration-150 ${tab === "payslips" ? "bg-white text-indigo-600 shadow-xs font-bold" : "hover:text-slate-900"}`}
-            >
-              My Payslips
-            </button>
-            <button
-              onClick={() => setTab("profile")}
-              className={`rounded-lg px-3 py-1.5 transition-all duration-150 ${tab === "profile" ? "bg-white text-indigo-600 shadow-xs font-bold" : "hover:text-slate-900"}`}
-            >
-              Profile
-            </button>
-          </nav>
-
+        {/* Right side actions */}
+        <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={() => setAiOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm shadow-indigo-500/25 hover:from-indigo-500 hover:to-violet-500 transition-all active:scale-95"
+            className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-3 sm:px-3.5 py-1.5 sm:py-2 text-xs font-bold text-white shadow-sm shadow-indigo-500/25 hover:from-indigo-500 hover:to-violet-500 transition-all active:scale-95 shrink-0"
           >
             <IconSparkles className="w-3.5 h-3.5 text-amber-300" />
-            <span className="hidden sm:inline">Ask Humi AI</span>
+            <span className="hidden xs:inline">Ask Humi AI</span>
+            <span className="xs:hidden">AI</span>
           </button>
 
-          <button onClick={logout} className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg transition-colors" title="Sign Out">
+          <button
+            onClick={logout}
+            className="text-slate-400 hover:text-rose-600 p-2 rounded-xl hover:bg-rose-50 transition-colors shrink-0"
+            title="Sign Out"
+          >
             <IconLogOut className="w-4 h-4" />
           </button>
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      {/* Responsive Horizontal Tab Bar (Always accessible, never squashed) */}
+      <div className="sticky top-16 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur-md px-3 sm:px-6 lg:px-8 py-2 shadow-xs">
+        <div className="max-w-6xl mx-auto overflow-x-auto scrollbar-none">
+          <nav className="flex items-center gap-1 sm:gap-1.5 min-w-max bg-slate-100/90 p-1 rounded-xl text-xs font-semibold text-slate-600">
+            <button
+              onClick={() => setTab("attendance")}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-all duration-150 ${
+                tab === "attendance"
+                  ? "bg-white text-indigo-600 shadow-xs font-bold"
+                  : "hover:text-slate-900 hover:bg-slate-200/50"
+              }`}
+            >
+              <IconClock className="w-3.5 h-3.5" />
+              <span>Attendance</span>
+            </button>
+            <button
+              onClick={() => setTab("leaves")}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-all duration-150 ${
+                tab === "leaves"
+                  ? "bg-white text-indigo-600 shadow-xs font-bold"
+                  : "hover:text-slate-900 hover:bg-slate-200/50"
+              }`}
+            >
+              <IconCalendar className="w-3.5 h-3.5" />
+              <span>Leaves</span>
+            </button>
+            <button
+              onClick={() => setTab("payslips")}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-all duration-150 ${
+                tab === "payslips"
+                  ? "bg-white text-indigo-600 shadow-xs font-bold"
+                  : "hover:text-slate-900 hover:bg-slate-200/50"
+              }`}
+            >
+              <IconFileText className="w-3.5 h-3.5" />
+              <span>My Payslips</span>
+            </button>
+            <button
+              onClick={() => setTab("profile")}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-all duration-150 ${
+                tab === "profile"
+                  ? "bg-white text-indigo-600 shadow-xs font-bold"
+                  : "hover:text-slate-900 hover:bg-slate-200/50"
+              }`}
+            >
+              <IconUserCheck className="w-3.5 h-3.5" />
+              <span>Profile</span>
+            </button>
+          </nav>
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-5 sm:py-8 space-y-5 sm:space-y-6">
         {/* Hero Welcome Card with Radiant Gradient */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-900 via-slate-900 to-violet-950 p-6 sm:p-8 text-white shadow-xl shadow-indigo-950/10 border border-indigo-800/40">
+        <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-indigo-900 via-slate-900 to-violet-950 p-5 sm:p-7 md:p-8 text-white shadow-xl shadow-indigo-950/10 border border-indigo-800/40">
           <div className="absolute -right-12 -top-12 h-64 w-64 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
           <div className="absolute right-48 -bottom-16 h-56 w-56 rounded-full bg-violet-500/20 blur-3xl pointer-events-none" />
 
-          <div className="relative z-10 flex flex-wrap items-center justify-between gap-6">
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-indigo-200 backdrop-blur-md border border-white/10 mb-3">
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-indigo-200 backdrop-blur-md border border-white/10 mb-2 sm:mb-3">
                 <IconCalendar className="w-3.5 h-3.5 text-indigo-300" />
                 <span>{todayLabel}</span>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight">
                 Welcome back, {profile?.name || "Team Member"}!
               </h1>
               <p className="mt-1 text-xs text-indigo-200/80 font-medium">
@@ -349,7 +380,7 @@ export default function EmployeePage() {
               </p>
             </div>
 
-            <div className="flex items-center gap-2.5 rounded-2xl bg-white/10 p-3 backdrop-blur-md border border-white/10 text-xs">
+            <div className="flex items-center gap-2.5 rounded-xl sm:rounded-2xl bg-white/10 p-2.5 sm:p-3 backdrop-blur-md border border-white/10 text-xs self-start sm:self-auto">
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_#34d399]" />
               <div>
                 <span className="block text-[10px] uppercase font-bold text-indigo-200">Database Status</span>
@@ -377,16 +408,16 @@ export default function EmployeePage() {
         {/* TAB 1: ATTENDANCE & WEB CHECK-IN                         */}
         {/* -------------------------------------------------------- */}
         {tab === "attendance" && (
-          <div className="space-y-6 animate-in fade-in duration-150">
+          <div className="space-y-5 sm:space-y-6 animate-in fade-in duration-150">
             {/* Quick Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
+              <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
                 <div className="flex items-center justify-between text-slate-400">
                   <span className="text-[11px] font-bold uppercase tracking-wider">Today Arrival</span>
                   <IconClock className="w-4 h-4 text-indigo-500" />
                 </div>
-                <div className="mt-3 flex items-baseline gap-2">
-                  <strong className="text-2xl font-black text-slate-900">
+                <div className="mt-2.5 sm:mt-3 flex items-baseline gap-2">
+                  <strong className="text-xl sm:text-2xl font-black text-slate-900">
                     {todayRecord ? formatTime(todayRecord.checkInAt) : "—"}
                   </strong>
                 </div>
@@ -399,13 +430,13 @@ export default function EmployeePage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
+              <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
                 <div className="flex items-center justify-between text-slate-400">
                   <span className="text-[11px] font-bold uppercase tracking-wider">Duty Hours (8h)</span>
                   <IconUserCheck className="w-4 h-4 text-indigo-500" />
                 </div>
-                <div className="mt-3 flex items-baseline gap-2">
-                  <strong className="text-2xl font-black text-slate-900">
+                <div className="mt-2.5 sm:mt-3 flex items-baseline gap-2">
+                  <strong className="text-xl sm:text-2xl font-black text-slate-900">
                     {todayHours.toFixed(2)} hrs
                   </strong>
                   <span className="text-xs text-slate-400">/ 8.0 hrs standard</span>
@@ -415,13 +446,13 @@ export default function EmployeePage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/50 to-white p-5 shadow-xs">
+              <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/50 to-white p-4 sm:p-5 shadow-xs sm:col-span-2 lg:col-span-1">
                 <div className="flex items-center justify-between text-emerald-600">
                   <span className="text-[11px] font-bold uppercase tracking-wider">Overtime Earned</span>
                   <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                 </div>
-                <div className="mt-3 flex items-baseline gap-2">
-                  <strong className={`text-2xl font-black ${todayOvertime > 0 ? "text-emerald-700" : "text-slate-400"}`}>
+                <div className="mt-2.5 sm:mt-3 flex items-baseline gap-2">
+                  <strong className={`text-xl sm:text-2xl font-black ${todayOvertime > 0 ? "text-emerald-700" : "text-slate-400"}`}>
                     +{todayOvertime.toFixed(2)} hrs
                   </strong>
                 </div>
@@ -432,21 +463,21 @@ export default function EmployeePage() {
             </div>
 
             {/* Check-In / Check-Out Action Surface */}
-            <div className="rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-7 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-slate-100">
+            <div className="rounded-2xl sm:rounded-3xl border border-slate-200/80 bg-white p-5 sm:p-7 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-4 sm:pb-5 border-b border-slate-100">
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">Daily Attendance Stamping</h2>
+                  <h2 className="text-base sm:text-lg font-bold text-slate-900">Daily Attendance Stamping</h2>
                   <p className="text-xs text-slate-500 mt-0.5">
                     1-Click web check-in. Office duty standard is 8.0 hours.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 w-full sm:w-auto">
                   {!todayRecord && (
                     <button
                       onClick={() => attendanceAction("check-in")}
                       disabled={Boolean(actionLoading)}
-                      className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-500/25 hover:from-indigo-500 hover:to-violet-500 transition-all active:scale-95 disabled:opacity-50"
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-500/25 hover:from-indigo-500 hover:to-violet-500 transition-all active:scale-95 disabled:opacity-50"
                     >
                       {actionLoading === "check-in" ? "Recording Arrival..." : "Check In Now"}
                       <IconArrowRight className="w-3.5 h-3.5" />
@@ -457,7 +488,7 @@ export default function EmployeePage() {
                     <button
                       onClick={() => attendanceAction("check-out")}
                       disabled={Boolean(actionLoading)}
-                      className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-rose-500/25 hover:from-rose-500 hover:to-red-500 transition-all active:scale-95 disabled:opacity-50"
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-rose-500/25 hover:from-rose-500 hover:to-red-500 transition-all active:scale-95 disabled:opacity-50"
                     >
                       {actionLoading === "check-out" ? "Recording Departure..." : "Check Out Now"}
                       <IconArrowRight className="w-3.5 h-3.5" />
@@ -465,7 +496,7 @@ export default function EmployeePage() {
                   )}
 
                   {todayRecord && todayRecord.checkOutAt && (
-                    <span className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-800">
+                    <span className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-800">
                       <IconCheckCircle className="w-4 h-4 text-emerald-600" />
                       Day Completed ({formatTime(todayRecord.checkInAt)} – {formatTime(todayRecord.checkOutAt)})
                     </span>
@@ -473,10 +504,10 @@ export default function EmployeePage() {
                 </div>
               </div>
 
-              <div className="mt-5 flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
+              <div className="mt-4 sm:mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-slate-50 border border-slate-100">
                 <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-indigo-50 text-indigo-600 font-bold">
-                    <IconClock className="w-5 h-5" />
+                  <span className="grid h-9 w-9 sm:h-10 sm:w-10 place-items-center rounded-xl bg-indigo-50 text-indigo-600 font-bold shrink-0">
+                    <IconClock className="w-4 h-4 sm:w-5 sm:h-5" />
                   </span>
                   <div>
                     <strong className="block text-xs font-bold text-slate-800">
@@ -491,7 +522,7 @@ export default function EmployeePage() {
                 </div>
 
                 {todayRecord && (
-                  <strong className="text-base font-extrabold text-indigo-600 font-mono">
+                  <strong className="text-base sm:text-lg font-extrabold text-indigo-600 font-mono self-end sm:self-auto">
                     {todayHours.toFixed(2)}h
                   </strong>
                 )}
@@ -499,10 +530,10 @@ export default function EmployeePage() {
             </div>
 
             {/* Attendance History (Date-Wise) */}
-            <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+            <div className="rounded-2xl sm:rounded-3xl border border-slate-200/80 bg-white p-4 sm:p-6 shadow-sm overflow-hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 sm:pb-4 border-b border-slate-100">
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">Attendance History</h3>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900">Attendance History</h3>
                   <p className="text-xs text-slate-500">Sorted by date showing arrival, departure, duty, and overtime.</p>
                 </div>
                 <span className="text-xs font-semibold text-slate-400">Total: {attendance.length} entries</span>
@@ -513,37 +544,40 @@ export default function EmployeePage() {
               ) : attendance.length === 0 ? (
                 <div className="py-12 text-center text-xs text-slate-400">No attendance records found yet.</div>
               ) : (
-                <div className="overflow-x-auto mt-3">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        <th className="py-3 px-3">Date</th>
-                        <th className="py-3 px-3">Arrival (Check-In)</th>
-                        <th className="py-3 px-3">Departure (Check-Out)</th>
-                        <th className="py-3 px-3">Duty Hours</th>
-                        <th className="py-3 px-3">Overtime Hours</th>
-                        <th className="py-3 px-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 font-medium">
-                      {attendance.map((record) => {
-                        const hours = Number(record.totalWorkHours || 0);
-                        const ot = Number(record.overtimeHours || (hours > 8 ? hours - 8 : 0));
-                        return (
-                          <tr key={record.id} className="hover:bg-indigo-50/30 transition-colors">
-                            <td className="py-3.5 px-3 font-bold text-slate-800">{formatDate(record.date)}</td>
-                            <td className="py-3.5 px-3 text-slate-600">{formatTime(record.checkInAt)}</td>
-                            <td className="py-3.5 px-3 text-slate-600">{formatTime(record.checkOutAt)}</td>
-                            <td className="py-3.5 px-3 font-semibold text-slate-800">{hours.toFixed(2)} hrs</td>
-                            <td className="py-3.5 px-3 font-bold text-emerald-600">
-                              {ot > 0 ? `+${ot.toFixed(2)} hrs OT` : "—"}
-                            </td>
-                            <td className="py-3.5 px-3">{statusBadge(record.status)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                <div className="mt-3">
+                  <div className="overflow-x-auto scrollbar-thin">
+                    <table className="w-full text-left text-xs min-w-[580px]">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          <th className="py-3 px-3">Date</th>
+                          <th className="py-3 px-3">Arrival (Check-In)</th>
+                          <th className="py-3 px-3">Departure (Check-Out)</th>
+                          <th className="py-3 px-3">Duty Hours</th>
+                          <th className="py-3 px-3">Overtime Hours</th>
+                          <th className="py-3 px-3">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                        {attendance.map((record) => {
+                          const hours = Number(record.totalWorkHours || 0);
+                          const ot = Number(record.overtimeHours || (hours > 8 ? hours - 8 : 0));
+                          return (
+                            <tr key={record.id} className="hover:bg-indigo-50/30 transition-colors">
+                              <td className="py-3.5 px-3 font-bold text-slate-800">{formatDate(record.date)}</td>
+                              <td className="py-3.5 px-3 text-slate-600">{formatTime(record.checkInAt)}</td>
+                              <td className="py-3.5 px-3 text-slate-600">{formatTime(record.checkOutAt)}</td>
+                              <td className="py-3.5 px-3 font-semibold text-slate-800">{hours.toFixed(2)} hrs</td>
+                              <td className="py-3.5 px-3 font-bold text-emerald-600">
+                                {ot > 0 ? `+${ot.toFixed(2)} hrs OT` : "—"}
+                              </td>
+                              <td className="py-3.5 px-3">{statusBadge(record.status)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="sm:hidden text-center text-[10px] text-slate-400 pt-2.5">⇄ Swipe table horizontally to view all columns</p>
                 </div>
               )}
             </div>
@@ -554,31 +588,31 @@ export default function EmployeePage() {
         {/* TAB 2: LEAVES & SELF-SERVICE                             */}
         {/* -------------------------------------------------------- */}
         {tab === "leaves" && (
-          <div className="space-y-6 animate-in fade-in duration-150">
+          <div className="space-y-5 sm:space-y-6 animate-in fade-in duration-150">
             {/* Quota Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/60 to-white p-5 shadow-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4">
+              <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/60 to-white p-4 sm:p-5 shadow-xs">
                 <small className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider">Casual Leaves</small>
                 <div className="mt-2 flex items-baseline gap-2">
-                  <strong className="text-3xl font-black text-indigo-900">10</strong>
+                  <strong className="text-2xl sm:text-3xl font-black text-indigo-900">10</strong>
                   <span className="text-xs text-slate-400">/ 10 days quota</span>
                 </div>
                 <p className="mt-1 text-[11px] text-slate-500">Short personal off-days</p>
               </div>
 
-              <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/60 to-white p-5 shadow-xs">
+              <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/60 to-white p-4 sm:p-5 shadow-xs">
                 <small className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Sick Leaves</small>
                 <div className="mt-2 flex items-baseline gap-2">
-                  <strong className="text-3xl font-black text-emerald-900">8</strong>
+                  <strong className="text-2xl sm:text-3xl font-black text-emerald-900">8</strong>
                   <span className="text-xs text-slate-400">/ 8 days quota</span>
                 </div>
                 <p className="mt-1 text-[11px] text-slate-500">Medical emergencies</p>
               </div>
 
-              <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50/60 to-white p-5 shadow-xs">
+              <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50/60 to-white p-4 sm:p-5 shadow-xs">
                 <small className="text-[10px] font-bold text-violet-700 uppercase tracking-wider">Annual Leaves</small>
                 <div className="mt-2 flex items-baseline gap-2">
-                  <strong className="text-3xl font-black text-violet-900">14</strong>
+                  <strong className="text-2xl sm:text-3xl font-black text-violet-900">14</strong>
                   <span className="text-xs text-slate-400">/ 14 days quota</span>
                 </div>
                 <p className="mt-1 text-[11px] text-slate-500">Planned vacations</p>
@@ -586,15 +620,15 @@ export default function EmployeePage() {
             </div>
 
             {/* Leave Applications History */}
-            <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+            <div className="rounded-2xl sm:rounded-3xl border border-slate-200/80 bg-white p-4 sm:p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-slate-100">
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">My Leave Requests</h3>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900">My Leave Requests</h3>
                   <p className="text-xs text-slate-500">Applications are reviewed and approved directly by Admin &amp; HR.</p>
                 </div>
                 <button
                   onClick={() => setShowApplyModal(true)}
-                  className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 transition"
+                  className="w-full sm:w-auto inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 sm:py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 transition"
                 >
                   + Apply for Leave
                 </button>
@@ -605,33 +639,36 @@ export default function EmployeePage() {
                   No leave requests submitted yet. Click &quot;Apply for Leave&quot; above.
                 </div>
               ) : (
-                <div className="overflow-x-auto mt-4">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        <th className="py-3 px-3">Type</th>
-                        <th className="py-3 px-3">Duration</th>
-                        <th className="py-3 px-3">Working Days</th>
-                        <th className="py-3 px-3">Reason</th>
-                        <th className="py-3 px-3">Status</th>
-                        <th className="py-3 px-3">Admin Note</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 font-medium">
-                      {leaves.map((leave) => (
-                        <tr key={leave.id} className="hover:bg-indigo-50/30 transition-colors">
-                          <td className="py-3.5 px-3 font-bold uppercase text-indigo-700">{leave.leaveType}</td>
-                          <td className="py-3.5 px-3 text-slate-600">
-                            {formatDate(leave.startDate)} – {formatDate(leave.endDate)}
-                          </td>
-                          <td className="py-3.5 px-3 font-bold text-slate-800">{leave.workingDays || 1} days</td>
-                          <td className="py-3.5 px-3 text-slate-500 max-w-xs truncate">{leave.reason}</td>
-                          <td className="py-3.5 px-3">{statusBadge(leave.status)}</td>
-                          <td className="py-3.5 px-3 text-slate-500 italic">{leave.hrComment || "—"}</td>
+                <div className="mt-4">
+                  <div className="overflow-x-auto scrollbar-thin">
+                    <table className="w-full text-left text-xs min-w-[600px]">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          <th className="py-3 px-3">Type</th>
+                          <th className="py-3 px-3">Duration</th>
+                          <th className="py-3 px-3">Working Days</th>
+                          <th className="py-3 px-3">Reason</th>
+                          <th className="py-3 px-3">Status</th>
+                          <th className="py-3 px-3">Admin Note</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                        {leaves.map((leave) => (
+                          <tr key={leave.id} className="hover:bg-indigo-50/30 transition-colors">
+                            <td className="py-3.5 px-3 font-bold uppercase text-indigo-700">{leave.leaveType}</td>
+                            <td className="py-3.5 px-3 text-slate-600">
+                              {formatDate(leave.startDate)} – {formatDate(leave.endDate)}
+                            </td>
+                            <td className="py-3.5 px-3 font-bold text-slate-800">{leave.workingDays || 1} days</td>
+                            <td className="py-3.5 px-3 text-slate-500 max-w-xs truncate">{leave.reason}</td>
+                            <td className="py-3.5 px-3">{statusBadge(leave.status)}</td>
+                            <td className="py-3.5 px-3 text-slate-500 italic">{leave.hrComment || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="sm:hidden text-center text-[10px] text-slate-400 pt-2.5">⇄ Swipe table horizontally to view full leave records</p>
                 </div>
               )}
             </div>
@@ -642,10 +679,10 @@ export default function EmployeePage() {
         {/* TAB 3: PAYSLIPS & SALARY BREAKDOWN                       */}
         {/* -------------------------------------------------------- */}
         {tab === "payslips" && (
-          <div className="space-y-6 animate-in fade-in duration-150">
-            <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm">
-              <div className="pb-4 border-b border-slate-100">
-                <h3 className="text-base font-bold text-slate-900">Monthly Payslip Archive</h3>
+          <div className="space-y-5 sm:space-y-6 animate-in fade-in duration-150">
+            <div className="rounded-2xl sm:rounded-3xl border border-slate-200/80 bg-white p-4 sm:p-6 shadow-sm">
+              <div className="pb-3 sm:pb-4 border-b border-slate-100">
+                <h3 className="text-sm sm:text-base font-bold text-slate-900">Monthly Payslip Archive</h3>
                 <p className="text-xs text-slate-500">Live breakdown of basic salary, overtime additions, and deductions.</p>
               </div>
 
@@ -654,54 +691,57 @@ export default function EmployeePage() {
                   No payroll runs finalized yet. Once Admin runs monthly payroll, payslips will appear here.
                 </div>
               ) : (
-                <div className="overflow-x-auto mt-4">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        <th className="py-3 px-3">Month</th>
-                        <th className="py-3 px-3">Base Salary</th>
-                        <th className="py-3 px-3">Overtime (+)</th>
-                        <th className="py-3 px-3">Late Cuts (-)</th>
-                        <th className="py-3 px-3">Absent Cuts (-)</th>
-                        <th className="py-3 px-3">Net Payable</th>
-                        <th className="py-3 px-3 text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 font-medium">
-                      {payrolls.map((payroll) => {
-                        const myLine = payroll.lines?.find((l) => l.employeeId === profile?.id);
-                        if (!myLine) return null;
-                        return (
-                          <tr key={payroll.id} className="hover:bg-indigo-50/30 transition-colors">
-                            <td className="py-3.5 px-3 font-bold text-slate-900">{payroll.month}</td>
-                            <td className="py-3.5 px-3 text-slate-700">
-                              {Number(myLine.basic || profile?.salary || 0).toLocaleString()} PKR
-                            </td>
-                            <td className="py-3.5 px-3 font-bold text-emerald-600">
-                              +{Number(myLine.overtimePay || 0).toLocaleString()} PKR ({myLine.totalOvertimeHours || 0}h)
-                            </td>
-                            <td className="py-3.5 px-3 font-semibold text-rose-600">
-                              -{Number(myLine.lateDeduction || 0).toLocaleString()} PKR
-                            </td>
-                            <td className="py-3.5 px-3 font-semibold text-rose-600">
-                              -{Number(myLine.absentDeduction || myLine.deductions || 0).toLocaleString()} PKR
-                            </td>
-                            <td className="py-3.5 px-3 font-black text-indigo-700 text-sm">
-                              {Number(myLine.netPay || 0).toLocaleString()} PKR
-                            </td>
-                            <td className="py-3.5 px-3 text-right">
-                              <button
-                                onClick={() => viewPayslip(payroll.id, profile.id)}
-                                className="rounded-xl border border-indigo-200 bg-indigo-50/80 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition"
-                              >
-                                View Payslip 📄
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                <div className="mt-4">
+                  <div className="overflow-x-auto scrollbar-thin">
+                    <table className="w-full text-left text-xs min-w-[650px]">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          <th className="py-3 px-3">Month</th>
+                          <th className="py-3 px-3">Base Salary</th>
+                          <th className="py-3 px-3">Overtime (+)</th>
+                          <th className="py-3 px-3">Late Cuts (-)</th>
+                          <th className="py-3 px-3">Absent Cuts (-)</th>
+                          <th className="py-3 px-3">Net Payable</th>
+                          <th className="py-3 px-3 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                        {payrolls.map((payroll) => {
+                          const myLine = payroll.lines?.find((l) => l.employeeId === profile?.id);
+                          if (!myLine) return null;
+                          return (
+                            <tr key={payroll.id} className="hover:bg-indigo-50/30 transition-colors">
+                              <td className="py-3.5 px-3 font-bold text-slate-900">{payroll.month}</td>
+                              <td className="py-3.5 px-3 text-slate-700">
+                                {Number(myLine.basic || profile?.salary || 0).toLocaleString()} PKR
+                              </td>
+                              <td className="py-3.5 px-3 font-bold text-emerald-600">
+                                +{Number(myLine.overtimePay || 0).toLocaleString()} PKR ({myLine.totalOvertimeHours || 0}h)
+                              </td>
+                              <td className="py-3.5 px-3 font-semibold text-rose-600">
+                                -{Number(myLine.lateDeduction || 0).toLocaleString()} PKR
+                              </td>
+                              <td className="py-3.5 px-3 font-semibold text-rose-600">
+                                -{Number(myLine.absentDeduction || myLine.deductions || 0).toLocaleString()} PKR
+                              </td>
+                              <td className="py-3.5 px-3 font-black text-indigo-700 text-sm">
+                                {Number(myLine.netPay || 0).toLocaleString()} PKR
+                              </td>
+                              <td className="py-3.5 px-3 text-right">
+                                <button
+                                  onClick={() => viewPayslip(payroll.id, profile.id)}
+                                  className="rounded-xl border border-indigo-200 bg-indigo-50/80 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition"
+                                >
+                                  View Payslip 📄
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="sm:hidden text-center text-[10px] text-slate-400 pt-2.5">⇄ Swipe table horizontally to view full payslip breakdown</p>
                 </div>
               )}
             </div>
@@ -712,10 +752,10 @@ export default function EmployeePage() {
         {/* TAB 4: PROFILE                                           */}
         {/* -------------------------------------------------------- */}
         {tab === "profile" && (
-          <div className="space-y-6 animate-in fade-in duration-150">
-            <div className="rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-8 shadow-sm">
+          <div className="space-y-5 sm:space-y-6 animate-in fade-in duration-150">
+            <div className="rounded-2xl sm:rounded-3xl border border-slate-200/80 bg-white p-5 sm:p-7 md:p-8 shadow-sm">
               <h3 className="text-base font-bold text-slate-900 mb-1">Employment Profile</h3>
-              <p className="text-xs text-slate-500 mb-6">Your verified employee records stored in the company database.</p>
+              <p className="text-xs text-slate-500 mb-5 sm:mb-6">Your verified employee records stored in the company database.</p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-3 bg-slate-50/80 p-5 rounded-2xl border border-slate-100 text-xs">
@@ -782,12 +822,12 @@ export default function EmployeePage() {
       {/* APPLY LEAVE MODAL                                        */}
       {/* -------------------------------------------------------- */}
       {showApplyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-md animate-in fade-in" onClick={() => setShowApplyModal(false)} />
-          <div className="relative z-50 w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl animate-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+          <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-xs animate-in fade-in" onClick={() => setShowApplyModal(false)} />
+          <div className="relative z-50 w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto my-auto rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl animate-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-base font-bold text-slate-900">Apply for Leave</h3>
-              <button onClick={() => setShowApplyModal(false)} className="text-slate-400 hover:text-slate-700">✕</button>
+              <button onClick={() => setShowApplyModal(false)} className="text-slate-400 hover:text-slate-700 p-1">✕</button>
             </div>
 
             <form onSubmit={handleApplyLeave} className="mt-4 space-y-4 text-xs">
@@ -805,7 +845,7 @@ export default function EmployeePage() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Start Date *</label>
                   <input
@@ -865,26 +905,26 @@ export default function EmployeePage() {
       {/* PAYSLIP MODAL (PRINTABLE / DOWNLOADABLE)                  */}
       {/* -------------------------------------------------------- */}
       {activePayslip && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-md animate-in fade-in" onClick={() => setActivePayslip(null)} />
-          <div className="relative z-50 w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-7 shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+          <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-xs animate-in fade-in" onClick={() => setActivePayslip(null)} />
+          <div className="relative z-50 w-full max-w-lg max-h-[calc(100dvh-2rem)] overflow-y-auto my-auto rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-5 sm:p-7 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:pb-4 gap-3">
               <div>
                 <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-600">Official Payslip</span>
-                <h3 className="text-xl font-bold text-slate-900">{activePayslip.employeeName}</h3>
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900">{activePayslip.employeeName}</h3>
                 <small className="text-slate-500">{activePayslip.department} · {activePayslip.month}</small>
               </div>
-              <button onClick={() => setActivePayslip(null)} className="text-slate-400 hover:text-slate-700">✕</button>
+              <button onClick={() => setActivePayslip(null)} className="text-slate-400 hover:text-slate-700 p-1">✕</button>
             </div>
 
-            <div className="mt-5 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+            <div className="mt-4 sm:mt-5 space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-100">
                 <div>
-                  <span className="block text-[10px] text-slate-400 uppercase">Working Days in Month</span>
+                  <span className="block text-[10px] text-slate-400 uppercase font-semibold">Working Days</span>
                   <strong className="text-sm font-bold text-slate-800">{activePayslip.workingDays} days</strong>
                 </div>
                 <div>
-                  <span className="block text-[10px] text-slate-400 uppercase">Per-Day Rate</span>
+                  <span className="block text-[10px] text-slate-400 uppercase font-semibold">Per-Day Rate</span>
                   <strong className="text-sm font-bold text-slate-800">{Math.round(activePayslip.perDayRate || 0).toLocaleString()} PKR</strong>
                 </div>
               </div>
@@ -925,12 +965,12 @@ export default function EmployeePage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 p-4 text-white shadow-md shadow-indigo-500/25">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 p-4 text-white shadow-md shadow-indigo-500/25">
                 <div>
                   <span className="block text-[10px] uppercase tracking-wider opacity-80">Net Payable Salary</span>
-                  <strong className="text-2xl font-black">{Number(activePayslip.netPay || 0).toLocaleString()} PKR</strong>
+                  <strong className="text-xl sm:text-2xl font-black">{Number(activePayslip.netPay || 0).toLocaleString()} PKR</strong>
                 </div>
-                <button onClick={() => window.print()} className="rounded-xl bg-white px-3.5 py-1.5 text-xs font-bold text-indigo-700 hover:bg-slate-50">
+                <button onClick={() => window.print()} className="w-full sm:w-auto rounded-xl bg-white px-4 py-2 text-xs font-bold text-indigo-700 hover:bg-slate-50 shadow-xs">
                   Print Payslip 🖨
                 </button>
               </div>

@@ -12,9 +12,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+};
+
 export const metadata = {
-  title: "Next.js Project",
-  description: "Project starting point.",
+  title: "HCM Lite | AI-Powered Human Capital Management",
+  description: "Next-generation Human Capital Management suite for Admins, HR Managers, and Employees with real-time Supabase cloud synchronization.",
 };
 
 export default function RootLayout({ children }) {

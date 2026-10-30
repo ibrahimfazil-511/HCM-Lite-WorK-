@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { IconArrowRight } from "../../components/ui/icons.js";
 import { safeResponseJson } from "../../lib/api.js";
+import { setClientSession } from "../../lib/client-auth.js";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -13,7 +14,7 @@ export default function LoginPage() {
   const [newPassword, setNewPassword] = useState("");
   const [redirectTarget, setRedirectTarget] = useState("");
 
-  useState(() => {
+  useEffect(() => {
     if (typeof window !== "undefined") {
       try {
         const searchParams = new URLSearchParams(window.location.search);
@@ -21,17 +22,23 @@ export default function LoginPage() {
         if (target) setRedirectTarget(target);
       } catch {}
     }
-  });
+  }, []);
 
   async function submit(event) {
     event.preventDefault();
     setError("");
     setLoading(true);
     try {
+      const targetRole = redirectTarget === "/hr" ? "HR" : redirectTarget === "/dashboard" ? "ADMIN" : undefined;
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+          portal: redirectTarget,
+          role: targetRole,
+        }),
       });
       const result = await safeResponseJson(response, {});
       if (!response.ok) {
@@ -44,11 +51,11 @@ export default function LoginPage() {
         return;
       }
 
-      window.localStorage.setItem("hcm_token", result.token);
+      setClientSession(result.token, result.user);
 
       // Honor redirect target if role is authorized
       if (redirectTarget) {
-        if (redirectTarget === "/hr" && ["HR", "ADMIN"].includes(result.user.role)) {
+        if (redirectTarget === "/hr" && result.user.role === "HR") {
           window.location.assign("/hr");
           return;
         }
@@ -90,7 +97,7 @@ export default function LoginPage() {
       const result = await safeResponseJson(response, {});
       if (!response.ok) throw new Error(result.error || "Unable to update password.");
 
-      localStorage.setItem("hcm_token", result.token);
+      setClientSession(result.token, result.user);
       if (result.user.role === "EMPLOYEE") {
         window.location.assign("/employee");
       } else if (result.user.role === "HR") {
@@ -106,25 +113,25 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative min-h-screen flex items-center justify-center p-4 bg-slate-900 overflow-hidden font-sans">
+    <main className="relative min-h-screen flex items-center justify-center p-3 sm:p-6 bg-slate-900 overflow-hidden font-sans">
       {/* Background Radiant Mesh Glows */}
       <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-indigo-600/30 blur-3xl pointer-events-none" />
       <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-violet-600/30 blur-3xl pointer-events-none" />
 
       {/* Login Card */}
-      <div className="relative z-10 w-full max-w-md rounded-3xl border border-slate-700/60 bg-slate-900/80 backdrop-blur-2xl p-8 sm:p-9 shadow-2xl shadow-black/50 text-white animate-in fade-in zoom-in-95">
-        <div className="flex items-center gap-3 mb-6">
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-tr from-indigo-500 to-violet-600 text-xl font-black text-white shadow-lg shadow-indigo-500/30">
+      <div className="relative z-10 w-full max-w-md rounded-2xl sm:rounded-3xl border border-slate-700/60 bg-slate-900/80 backdrop-blur-2xl p-5 sm:p-8 md:p-9 shadow-2xl shadow-black/50 text-white animate-in fade-in zoom-in-95 my-auto">
+        <div className="flex items-center gap-3 mb-5 sm:mb-6">
+          <span className="grid h-9 w-9 sm:h-10 sm:w-10 place-items-center rounded-xl sm:rounded-2xl bg-gradient-to-tr from-indigo-500 to-violet-600 text-lg sm:text-xl font-black text-white shadow-lg shadow-indigo-500/30 shrink-0">
             h
           </span>
           <div>
-            <strong className="text-base font-extrabold tracking-tight text-white block">HCM Lite</strong>
-            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Human Capital Management</span>
+            <strong className="text-sm sm:text-base font-extrabold tracking-tight text-white block">HCM Lite</strong>
+            <span className="text-[9px] sm:text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Human Capital Management</span>
           </div>
         </div>
 
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold tracking-tight text-white">
+        <div className="mb-5 sm:mb-6">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
             {mustChange ? "Set New Password" : "Sign In to Workspace"}
           </h1>
           <p className="mt-1 text-xs text-slate-400">
@@ -135,8 +142,8 @@ export default function LoginPage() {
         </div>
 
         {redirectTarget && (
-          <div className="mb-5 rounded-2xl border border-indigo-500/40 bg-indigo-500/15 p-3.5 text-xs text-indigo-200 flex items-center gap-2.5">
-            <span className="grid h-7 w-7 place-items-center rounded-xl bg-indigo-500/25 text-indigo-300 font-bold text-xs">🔒</span>
+          <div className="mb-4 sm:mb-5 rounded-xl sm:rounded-2xl border border-indigo-500/40 bg-indigo-500/15 p-3 sm:p-3.5 text-xs text-indigo-200 flex items-center gap-2.5">
+            <span className="grid h-7 w-7 place-items-center rounded-xl bg-indigo-500/25 text-indigo-300 font-bold text-xs shrink-0">🔒</span>
             <div>
               <strong className="block text-white">Authentication Required</strong>
               <span className="text-[11px] text-indigo-300">
@@ -147,10 +154,39 @@ export default function LoginPage() {
         )}
 
         {error && (
-          <div className="mb-5 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 text-xs font-medium text-rose-300 animate-in fade-in">
+          <div className="mb-4 sm:mb-5 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 sm:p-3.5 text-xs font-medium text-rose-300 animate-in fade-in">
             {error}
           </div>
         )}
+
+        <div className="mb-4 space-y-1.5">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            Quick Test Accounts (Click to Auto-Fill):
+          </span>
+          <div className="grid grid-cols-1 xs:grid-cols-3 gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => { setEmail("admin@example.com"); setPassword("Admin123!"); setRedirectTarget("/dashboard"); }}
+              className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/25 py-2 px-2 text-[11px] font-bold text-indigo-300 text-center transition active:scale-95"
+            >
+              👑 Admin
+            </button>
+            <button
+              type="button"
+              onClick={() => { setEmail("admin@example.com"); setPassword("Admin123!"); setRedirectTarget("/hr"); }}
+              className="rounded-xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/25 py-2 px-2 text-[11px] font-bold text-purple-300 text-center transition active:scale-95"
+            >
+              👥 HR Manager
+            </button>
+            <button
+              type="button"
+              onClick={() => { setEmail("ali.khan@example.com"); setPassword("Employee123!"); setRedirectTarget("/employee"); }}
+              className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/25 py-2 px-2 text-[11px] font-bold text-emerald-300 text-center transition active:scale-95"
+            >
+              📱 Employee
+            </button>
+          </div>
+        </div>
 
         <form onSubmit={mustChange ? changePassword : submit} className="space-y-4 text-xs">
           <div>
