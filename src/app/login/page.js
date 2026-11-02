@@ -1,17 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { IconArrowRight } from "../../components/ui/icons.js";
+import { IconArrowRight, IconShieldCheck, IconLock, IconCheckCircle } from "../../components/ui/icons.js";
 import { safeResponseJson } from "../../lib/api.js";
 import { setClientSession } from "../../lib/client-auth.js";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [infoMessage, setInfoMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  
+  // First-time login / Temporary password state
   const [mustChange, setMustChange] = useState(false);
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [redirectTarget, setRedirectTarget] = useState("");
 
   useEffect(() => {
@@ -27,7 +35,9 @@ export default function LoginPage() {
   async function submit(event) {
     event.preventDefault();
     setError("");
+    setInfoMessage("");
     setLoading(true);
+
     try {
       const targetRole = redirectTarget === "/hr" ? "HR" : redirectTarget === "/dashboard" ? "ADMIN" : undefined;
       const response = await fetch("/api/auth/login", {
@@ -41,13 +51,16 @@ export default function LoginPage() {
         }),
       });
       const result = await safeResponseJson(response, {});
+
+      // Check if temporary password was verified and first-time password creation is required
+      if (result.code === "MUST_CHANGE_PASSWORD" || result.mustChangePassword) {
+        setMustChange(true);
+        setInfoMessage("Temporary password verified! Please create your own permanent password to continue.");
+        return;
+      }
+
       if (!response.ok) {
-        if (result.code === "MUST_CHANGE_PASSWORD") {
-          setMustChange(true);
-          setError("This is a temporary password. Please create your personal password to continue.");
-        } else {
-          setError(result.error || "Invalid email or password.");
-        }
+        setError(result.error || "Invalid email or password.");
         return;
       }
 
@@ -87,29 +100,56 @@ export default function LoginPage() {
   async function changePassword(event) {
     event.preventDefault();
     setError("");
+
+    if (newPassword.length < 8) {
+      setError("Your new password must be at least 8 characters long.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError("New passwords do not match. Please verify both fields.");
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await fetch("/api/auth/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), currentPassword: password, newPassword }),
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          currentPassword: password,
+          newPassword,
+        }),
       });
       const result = await safeResponseJson(response, {});
       if (!response.ok) throw new Error(result.error || "Unable to update password.");
 
       setClientSession(result.token, result.user);
-      if (result.user.role === "EMPLOYEE") {
-        window.location.assign("/employee");
-      } else if (result.user.role === "HR") {
-        window.location.assign("/hr");
-      } else {
-        window.location.assign("/dashboard");
-      }
+      setInfoMessage("Password set successfully! Redirecting to your workspace...");
+
+      setTimeout(() => {
+        if (result.user.role === "EMPLOYEE") {
+          window.location.assign("/employee");
+        } else if (result.user.role === "HR") {
+          window.location.assign("/hr");
+        } else {
+          window.location.assign("/dashboard");
+        }
+      }, 700);
     } catch (changeError) {
       setError(changeError.message);
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleCancelPasswordChange() {
+    setMustChange(false);
+    setNewPassword("");
+    setConfirmPassword("");
+    setError("");
+    setInfoMessage("");
   }
 
   return (
@@ -132,16 +172,16 @@ export default function LoginPage() {
 
         <div className="mb-5 sm:mb-6">
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-            {mustChange ? "Set New Password" : "Sign In to Workspace"}
+            {mustChange ? "Create Your Own Password" : "Sign In to Workspace"}
           </h1>
           <p className="mt-1 text-xs text-slate-400">
             {mustChange
-              ? "Create a permanent password for your employee account."
+              ? "Welcome! Please choose a secure permanent password for your employee account. You will use this new password for all future logins."
               : "Enter your credentials to open Admin, HR, or Employee portal."}
           </p>
         </div>
 
-        {redirectTarget && (
+        {redirectTarget && !mustChange && (
           <div className="mb-4 sm:mb-5 rounded-xl sm:rounded-2xl border border-indigo-500/40 bg-indigo-500/15 p-3 sm:p-3.5 text-xs text-indigo-200 flex items-center gap-2.5">
             <span className="grid h-7 w-7 place-items-center rounded-xl bg-indigo-500/25 text-indigo-300 font-bold text-xs shrink-0">🔒</span>
             <div>
@@ -153,92 +193,160 @@ export default function LoginPage() {
           </div>
         )}
 
+        {infoMessage && (
+          <div className="mb-4 sm:mb-5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 p-3 sm:p-3.5 text-xs font-medium text-emerald-200 flex items-start gap-2.5 animate-in fade-in">
+            <span className="text-base leading-none">🎉</span>
+            <div>
+              <strong className="block text-emerald-100">First-Time Setup</strong>
+              <span>{infoMessage}</span>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="mb-4 sm:mb-5 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 sm:p-3.5 text-xs font-medium text-rose-300 animate-in fade-in">
             {error}
           </div>
         )}
 
-        <div className="mb-4 space-y-1.5">
-          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            Quick Test Accounts (Click to Auto-Fill):
-          </span>
-          <div className="grid grid-cols-1 xs:grid-cols-3 gap-1.5 sm:gap-2">
-            <button
-              type="button"
-              onClick={() => { setEmail("admin@example.com"); setPassword("Admin123!"); setRedirectTarget("/dashboard"); }}
-              className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/25 py-2 px-2 text-[11px] font-bold text-indigo-300 text-center transition active:scale-95"
-            >
-              👑 Admin
-            </button>
-            <button
-              type="button"
-              onClick={() => { setEmail("admin@example.com"); setPassword("Admin123!"); setRedirectTarget("/hr"); }}
-              className="rounded-xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/25 py-2 px-2 text-[11px] font-bold text-purple-300 text-center transition active:scale-95"
-            >
-              👥 HR Manager
-            </button>
-            <button
-              type="button"
-              onClick={() => { setEmail("ali.khan@example.com"); setPassword("Employee123!"); setRedirectTarget("/employee"); }}
-              className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/25 py-2 px-2 text-[11px] font-bold text-emerald-300 text-center transition active:scale-95"
-            >
-              📱 Employee
-            </button>
-          </div>
-        </div>
-
-        <form onSubmit={mustChange ? changePassword : submit} className="space-y-4 text-xs">
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">Email Address</label>
-            <input
-              required
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="e.g. admin@example.com"
-              className="w-full rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              {mustChange ? "Temporary Password" : "Password"}
-            </label>
-            <input
-              required
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
-            />
-          </div>
-
-          {mustChange && (
+        {!mustChange ? (
+          /* STEP 1: STANDARD / TEMPORARY PASSWORD LOGIN */
+          <form onSubmit={submit} className="space-y-4 text-xs">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">New Password (min 8 chars)</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Email Address</label>
               <input
                 required
-                minLength={8}
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new strong password"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="e.g. employee@company.com"
                 className="w-full rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
               />
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 py-3 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 hover:from-indigo-500 hover:to-violet-500 transition-all active:scale-98 disabled:opacity-50"
-          >
-            {loading ? "Authenticating..." : mustChange ? "Update Password & Enter" : "Sign In to Portal"}
-            <IconArrowRight className="w-4 h-4" />
-          </button>
-        </form>
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-slate-300">Password</label>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="text-[10px] text-indigo-400 hover:text-indigo-300 transition"
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+              <input
+                required
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
+              />
+              <p className="mt-1 text-[11px] text-slate-400">
+                First time logging in? Enter the temporary password provided by your HR/Admin.
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 py-3 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 hover:from-indigo-500 hover:to-violet-500 transition-all active:scale-98 disabled:opacity-50"
+            >
+              {loading ? "Verifying Credentials..." : "Sign In to Portal"}
+              <IconArrowRight className="w-4 h-4" />
+            </button>
+          </form>
+        ) : (
+          /* STEP 2: CREATE YOUR OWN PERMANENT PASSWORD */
+          <form onSubmit={changePassword} className="space-y-4 text-xs">
+            <div className="p-3 rounded-xl bg-slate-800/90 border border-slate-700/80 text-[11px] space-y-1">
+              <span className="text-slate-400 block">Verified Account:</span>
+              <strong className="text-white font-mono break-all">{email}</strong>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-slate-300">
+                  New Password (min 8 chars) *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="text-[10px] text-indigo-400 hover:text-indigo-300 transition"
+                >
+                  {showNewPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+              <input
+                required
+                minLength={8}
+                type={showNewPassword ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Choose a strong permanent password"
+                className="w-full rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
+              />
+              <div className="mt-1 flex items-center gap-1.5 text-[10px]">
+                <span className={newPassword.length >= 8 ? "text-emerald-400 font-semibold" : "text-slate-500"}>
+                  {newPassword.length >= 8 ? "✓ At least 8 characters" : "• At least 8 characters required"}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-slate-300">
+                  Confirm New Password *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="text-[10px] text-indigo-400 hover:text-indigo-300 transition"
+                >
+                  {showConfirmPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+              <input
+                required
+                minLength={8}
+                type={showConfirmPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Re-enter your new password"
+                className="w-full rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
+              />
+              {confirmPassword && (
+                <div className="mt-1 text-[10px]">
+                  {newPassword === confirmPassword ? (
+                    <span className="text-emerald-400 font-semibold">✓ Passwords match</span>
+                  ) : (
+                    <span className="text-rose-400 font-semibold">✕ Passwords do not match</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 space-y-2">
+              <button
+                type="submit"
+                disabled={loading || newPassword.length < 8 || newPassword !== confirmPassword}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3 text-xs font-bold text-white shadow-lg shadow-emerald-600/30 hover:from-emerald-500 hover:to-teal-500 transition-all active:scale-98 disabled:opacity-50"
+              >
+                {loading ? "Saving Permanent Password..." : "Set My Password & Enter Portal"}
+                <IconArrowRight className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCancelPasswordChange}
+                className="w-full text-center py-2 text-[11px] text-slate-400 hover:text-white transition"
+              >
+                ← Back to Login
+              </button>
+            </div>
+          </form>
+        )}
 
         <div className="mt-6 pt-5 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
           <a href="/" className="hover:text-indigo-400 transition flex items-center gap-1 font-medium">

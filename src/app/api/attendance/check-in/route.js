@@ -2,15 +2,22 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { authenticate } from "../../../../lib/auth";
 import { auditLog } from "../../../../lib/audit";
-import { getTodayKey, isLate } from "../../../../lib/attendance";
+import { getTodayKey, isLate, calculateLateHours } from "../../../../lib/attendance";
 import { readStore, writeStore } from "../../../../lib/store";
 
 function authResponse(auth) {
   return NextResponse.json({ error: auth.error }, { status: auth.status });
 }
 
-function resolveEmployeeId(authUser, payload) {
-  if (authUser.role === "EMPLOYEE") return authUser.employeeId;
+function resolveEmployeeId(authUser, payload, store) {
+  if (authUser.role === "EMPLOYEE") {
+    if (authUser.employeeId) return authUser.employeeId;
+    const match = (store.employees || []).find((c) =>
+      (c.userId && c.userId === authUser.userId) ||
+      (c.email && String(c.email).toLowerCase() === String(authUser.email || "").toLowerCase())
+    );
+    return match?.id || null;
+  }
   return typeof payload?.employeeId === "string" ? payload.employeeId : null;
 }
 
@@ -22,18 +29,32 @@ export async function POST(request) {
   try {
     payload = await request.json();
   } catch {
-    // optional payload
+    // optional body
   }
 
-  const employeeId = resolveEmployeeId(auth.user, payload);
-  if (!employeeId) return NextResponse.json({ error: "employeeId is required for this account." }, { status: 400 });
-
   const store = await readStore();
-  const employee = (store.employees || []).find((candidate) => candidate.id === employeeId);
-  if (!employee) return NextResponse.json({ error: "Employee not found." }, { status: 404 });
+  const employeeId = resolveEmployeeId(auth.user, payload, store);
+  if (!employeeId) return NextResponse.json({ error: "employeeId is required for this account." }, { status: 400 });
 
   const now = new Date();
   const today = getTodayKey(now);
+
+  // Check if employee is on approved leave today.
+  // If yes, check-in is blocked because their salary is already safeguarded by approved leave quota.
+  const leaves = store.leaves || [];
+  const onApprovedLeave = leaves.find((l) =>
+    l.employeeId === employeeId &&
+    String(l.status).toLowerCase() === "approved" &&
+    today >= l.startDate &&
+    today <= l.endDate
+  );
+  if (onApprovedLeave) {
+    return NextResponse.json({
+      error: `You are on approved ${onApprovedLeave.leaveType} leave today (${onApprovedLeave.startDate} to ${onApprovedLeave.endDate}). Check-in is disabled.`,
+      code: "ON_APPROVED_LEAVE",
+    }, { status: 403 });
+  }
+
   const attendance = store.attendance || [];
   const existing = attendance.find((record) => record.employeeId === employeeId && record.date === today);
   if (existing) {
@@ -41,6 +62,7 @@ export async function POST(request) {
   }
 
   const late = isLate(now, store.office);
+  const lateHours = late ? calculateLateHours(now, store.office) : 0;
   const record = {
     id: randomUUID(),
     employeeId,
@@ -50,6 +72,7 @@ export async function POST(request) {
     status: late ? "late" : "present",
     totalWorkHours: 0,
     overtimeHours: 0,
+    lateHours: lateHours,
     dutyHours: 8,
     isLate: Boolean(late),
   };

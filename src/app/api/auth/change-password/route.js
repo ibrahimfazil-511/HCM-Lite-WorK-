@@ -16,7 +16,9 @@ export async function POST(request) {
     const newPassword = typeof payload?.newPassword === "string" ? payload.newPassword : "";
 
     if (!email || !currentPassword || newPassword.length < 8) {
-      return NextResponse.json({ error: "Email, current password, and a new password of at least 8 characters are required." }, { status: 400 });
+      return NextResponse.json({
+        error: "Email, current/temporary password, and a new password of at least 8 characters are required.",
+      }, { status: 400 });
     }
 
     const store = await readStore();
@@ -30,12 +32,9 @@ export async function POST(request) {
     const hash = user.passwordHash || user.passwordhash || user.password_hash || "";
     const isMatch = await verifyPassword(currentPassword, hash);
     if (!isMatch) {
-      return NextResponse.json({ error: "Invalid email or current password." }, { status: 401 });
-    }
-
-    const isTemp = Boolean(user.mustChangePassword || user.mustchangepassword || user.isTempPassword || user.istemppassword);
-    if (!isTemp) {
-      return NextResponse.json({ error: "Password change is not required for this account." }, { status: 409 });
+      return NextResponse.json({
+        error: "Incorrect temporary password. Please re-enter the temporary password provided by your Admin/HR.",
+      }, { status: 401 });
     }
 
     const newHash = await hashPassword(newPassword);
@@ -52,9 +51,20 @@ export async function POST(request) {
     users[index] = updatedUser;
     await writeStore({ ...store, users });
 
-    const identity = { userId: user.id, role: user.role, employeeId: user.employeeId || null, name: user.name || "", email: user.email || "" };
+    const identity = {
+      userId: user.id,
+      role: user.role,
+      employeeId: user.employeeId || null,
+      name: user.name || "",
+      email: user.email || "",
+    };
     const token = createToken(identity);
-    const response = NextResponse.json({ token, user: identity });
+    const response = NextResponse.json({
+      success: true,
+      token,
+      user: identity,
+      message: "Password created successfully! Welcome to your workspace.",
+    });
 
     try {
       response.cookies.set("hcm_token", token, {

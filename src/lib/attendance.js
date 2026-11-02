@@ -34,3 +34,19 @@ export function getLateThreshold(office) {
 export function isLate(date, office) {
   return date.getHours() * 60 + date.getMinutes() > getLateThreshold(office);
 }
+
+export function getLateMinutes(date, office) {
+  const [hours, minutes] = String(office?.startTime || "09:00").split(":").map(Number);
+  const startMinutes = (Number.isFinite(hours) ? hours : 9) * 60 + (Number.isFinite(minutes) ? minutes : 0);
+  const grace = Number.isFinite(Number(office?.graceMinutes)) ? Number(office.graceMinutes) : 15;
+  const d = typeof date === "string" ? new Date(date) : date;
+  if (!d || isNaN(d.getTime())) return 0;
+  const arrivalMinutes = d.getHours() * 60 + d.getMinutes();
+  if (arrivalMinutes <= startMinutes + grace) return 0;
+  return Math.max(0, arrivalMinutes - startMinutes);
+}
+
+export function calculateLateHours(date, office) {
+  const lateMinutes = getLateMinutes(date, office);
+  return Number((lateMinutes / 60).toFixed(2));
+}

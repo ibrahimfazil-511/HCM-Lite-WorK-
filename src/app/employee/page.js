@@ -30,10 +30,13 @@ function formatTime(value) {
 function statusBadge(status) {
   const s = String(status || "").toLowerCase();
   if (s === "present" || s === "approved") {
-    return <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200/80"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{s.toUpperCase()}</span>;
+    return <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200/80"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{s === "approved" ? "APPROVES" : s.toUpperCase()}</span>;
   }
   if (s === "late" || s === "pending") {
-    return <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200/80"><span className="h-1.5 w-1.5 rounded-full bg-amber-500" />{s.toUpperCase()}</span>;
+    return <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200/80"><span className="h-1.5 w-1.5 rounded-full bg-amber-500" />PENDING</span>;
+  }
+  if (s === "rejected" || s === "not_approved") {
+    return <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-0.5 text-[11px] font-bold text-rose-700 border border-rose-200/80"><span className="h-1.5 w-1.5 rounded-full bg-rose-500" />NOT APPROVES</span>;
   }
   return <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-0.5 text-[11px] font-bold text-rose-700 border border-rose-200/80"><span className="h-1.5 w-1.5 rounded-full bg-rose-500" />{s.replace("_", " ").toUpperCase()}</span>;
 }
@@ -54,6 +57,7 @@ export default function EmployeePage() {
   const [today, setToday] = useState("");
   const [currentTime, setCurrentTime] = useState(0);
   const [aiOpen, setAiOpen] = useState(false);
+  const [expandedMonthRecordEmpId, setExpandedMonthRecordEmpId] = useState(null);
 
   // Apply Leave Form State
   const [showApplyModal, setShowApplyModal] = useState(false);
@@ -152,6 +156,14 @@ export default function EmployeePage() {
 
   const todayRecord = attendance.find((record) => record.date === today);
 
+  const approvedLeaveToday = useMemo(() => {
+    if (!today || !leaves?.length) return null;
+    return leaves.find((l) => {
+      const s = String(l.status || "").toLowerCase();
+      return s === "approved" && l.startDate <= today && today <= l.endDate;
+    });
+  }, [leaves, today]);
+
   const liveHours = (record) => {
     if (!record?.checkInAt) return 0;
     if (record.checkOutAt) return Number(record.totalWorkHours || 0);
@@ -160,6 +172,10 @@ export default function EmployeePage() {
 
   const todayHours = todayRecord ? liveHours(todayRecord) : 0;
   const todayOvertime = todayHours > 8 ? Number((todayHours - 8).toFixed(2)) : 0;
+  const basicSalary = Number(profile?.salary || 0);
+  const hourlyRate = basicSalary > 0 ? (basicSalary / 22) / 8 : 0;
+  const overtimeRate = hourlyRate * 1.5;
+  const todayOvertimePay = todayOvertime > 0 ? Math.round(todayOvertime * overtimeRate) : 0;
   const totalHours = useMemo(() => attendance.reduce((sum, record) => sum + liveHours(record), 0), [attendance, currentTime]);
   const todayLabel = today ? new Intl.DateTimeFormat("en", { dateStyle: "full" }).format(new Date(`${today}T00:00:00`)) : "Today";
 
@@ -373,10 +389,10 @@ export default function EmployeePage() {
                 <span>{todayLabel}</span>
               </div>
               <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight">
-                Welcome back, {profile?.name || "Team Member"}!
+                Welcome to Employee Portal
               </h1>
               <p className="mt-1 text-xs text-indigo-200/80 font-medium">
-                {profile?.designation || "Staff"} · {profile?.department || "General Department"}
+                {profile?.designation || "Staff Member"} · {profile?.department || "Department"}
               </p>
             </div>
 
@@ -451,13 +467,18 @@ export default function EmployeePage() {
                   <span className="text-[11px] font-bold uppercase tracking-wider">Overtime Earned</span>
                   <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                 </div>
-                <div className="mt-2.5 sm:mt-3 flex items-baseline gap-2">
+                <div className="mt-2.5 sm:mt-3 flex items-baseline gap-2 flex-wrap">
                   <strong className={`text-xl sm:text-2xl font-black ${todayOvertime > 0 ? "text-emerald-700" : "text-slate-400"}`}>
                     +{todayOvertime.toFixed(2)} hrs
                   </strong>
+                  {todayOvertimePay > 0 && (
+                    <span className="text-xs font-black text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-md border border-emerald-300">
+                      +{todayOvertimePay.toLocaleString()} PKR
+                    </span>
+                  )}
                 </div>
                 <div className="mt-1 text-xs text-emerald-700 font-medium">
-                  {todayOvertime > 0 ? "1.5× rate added to salary" : "Overtime starts after 8 hours"}
+                  {todayOvertime > 0 ? `1.5× hourly rate (+${todayOvertimePay.toLocaleString()} PKR) added to salary` : "Duty hours: 09:00 AM – 05:00 PM (8h standard)"}
                 </div>
               </div>
             </div>
@@ -468,12 +489,17 @@ export default function EmployeePage() {
                 <div>
                   <h2 className="text-base sm:text-lg font-bold text-slate-900">Daily Attendance Stamping</h2>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    1-Click web check-in. Office duty standard is 8.0 hours.
+                    Office timing: 09:00 AM – 05:00 PM (8.0h duty). Overtime calculated past 5:00 PM.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2.5 w-full sm:w-auto">
-                  {!todayRecord && (
+                  {approvedLeaveToday ? (
+                    <div className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs font-bold text-amber-800 shadow-xs">
+                      <IconCalendar className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>On Approved Leave ({approvedLeaveToday.leaveType?.toUpperCase()}) — Attendance Stamping Disabled</span>
+                    </div>
+                  ) : !todayRecord ? (
                     <button
                       onClick={() => attendanceAction("check-in")}
                       disabled={Boolean(actionLoading)}
@@ -482,9 +508,7 @@ export default function EmployeePage() {
                       {actionLoading === "check-in" ? "Recording Arrival..." : "Check In Now"}
                       <IconArrowRight className="w-3.5 h-3.5" />
                     </button>
-                  )}
-
-                  {todayRecord && !todayRecord.checkOutAt && (
+                  ) : !todayRecord.checkOutAt ? (
                     <button
                       onClick={() => attendanceAction("check-out")}
                       disabled={Boolean(actionLoading)}
@@ -493,9 +517,7 @@ export default function EmployeePage() {
                       {actionLoading === "check-out" ? "Recording Departure..." : "Check Out Now"}
                       <IconArrowRight className="w-3.5 h-3.5" />
                     </button>
-                  )}
-
-                  {todayRecord && todayRecord.checkOutAt && (
+                  ) : (
                     <span className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-800">
                       <IconCheckCircle className="w-4 h-4 text-emerald-600" />
                       Day Completed ({formatTime(todayRecord.checkInAt)} – {formatTime(todayRecord.checkOutAt)})
@@ -506,22 +528,28 @@ export default function EmployeePage() {
 
               <div className="mt-4 sm:mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-slate-50 border border-slate-100">
                 <div className="flex items-center gap-3">
-                  <span className="grid h-9 w-9 sm:h-10 sm:w-10 place-items-center rounded-xl bg-indigo-50 text-indigo-600 font-bold shrink-0">
-                    <IconClock className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <span className={`grid h-9 w-9 sm:h-10 sm:w-10 place-items-center rounded-xl font-bold shrink-0 ${approvedLeaveToday ? "bg-amber-100 text-amber-700" : "bg-indigo-50 text-indigo-600"}`}>
+                    {approvedLeaveToday ? <IconCalendar className="w-4 h-4 sm:w-5 sm:h-5" /> : <IconClock className="w-4 h-4 sm:w-5 sm:h-5" />}
                   </span>
                   <div>
                     <strong className="block text-xs font-bold text-slate-800">
-                      {todayRecord ? `Arrival recorded at ${formatTime(todayRecord.checkInAt)}` : "Awaiting check-in for today"}
+                      {approvedLeaveToday
+                        ? `Official Approved Leave Active: ${approvedLeaveToday.leaveType?.toUpperCase()} LEAVE`
+                        : todayRecord
+                        ? `Arrival recorded at ${formatTime(todayRecord.checkInAt)}`
+                        : "Awaiting check-in for today"}
                     </strong>
                     <span className="text-[11px] text-slate-500">
-                      {todayRecord
-                        ? `Departure: ${formatTime(todayRecord.checkOutAt)} · Duty: ${todayHours.toFixed(2)}h ${todayOvertime > 0 ? `(+${todayOvertime.toFixed(2)}h Overtime)` : ""}`
-                        : "Click 'Check In Now' to stamp your official arrival time."}
+                      {approvedLeaveToday
+                        ? `Your ${approvedLeaveToday.leaveType} leave is officially approved from ${formatDate(approvedLeaveToday.startDate)} to ${formatDate(approvedLeaveToday.endDate)}. Check-in and check-out are locked for these approved days.`
+                        : todayRecord
+                        ? `Departure: ${formatTime(todayRecord.checkOutAt)} · Duty: ${todayHours.toFixed(2)}h ${todayOvertime > 0 ? `(+${todayOvertime.toFixed(2)}h Overtime = +${todayOvertimePay.toLocaleString()} PKR added to salary)` : ""}`
+                        : "Official duty: 09:00 AM – 05:00 PM (8.0h standard). Overtime calculated after 8 hours."}
                     </span>
                   </div>
                 </div>
 
-                {todayRecord && (
+                {!approvedLeaveToday && todayRecord && (
                   <strong className="text-base sm:text-lg font-extrabold text-indigo-600 font-mono self-end sm:self-auto">
                     {todayHours.toFixed(2)}h
                   </strong>
@@ -681,67 +709,336 @@ export default function EmployeePage() {
         {tab === "payslips" && (
           <div className="space-y-5 sm:space-y-6 animate-in fade-in duration-150">
             <div className="rounded-2xl sm:rounded-3xl border border-slate-200/80 bg-white p-4 sm:p-6 shadow-sm">
-              <div className="pb-3 sm:pb-4 border-b border-slate-100">
-                <h3 className="text-sm sm:text-base font-bold text-slate-900">Monthly Payslip Archive</h3>
-                <p className="text-xs text-slate-500">Live breakdown of basic salary, overtime additions, and deductions.</p>
+              <div className="pb-3 sm:pb-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900">Monthly Salary &amp; Attendance Calculation</h3>
+                  <p className="text-xs text-slate-500">
+                    Standard 30-Day Working Month. Attendance, leaves, late arrivals, and overtime calculations based on your basic salary.
+                  </p>
+                </div>
               </div>
 
               {payrolls.length === 0 ? (
                 <div className="py-12 text-center text-xs text-slate-400">
-                  No payroll runs finalized yet. Once Admin runs monthly payroll, payslips will appear here.
+                  No payroll runs finalized yet. Once Admin/HR runs monthly payroll, your complete calculation table will appear here.
                 </div>
               ) : (
-                <div className="mt-4">
-                  <div className="overflow-x-auto scrollbar-thin">
-                    <table className="w-full text-left text-xs min-w-[650px]">
-                      <thead>
-                        <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                          <th className="py-3 px-3">Month</th>
-                          <th className="py-3 px-3">Base Salary</th>
-                          <th className="py-3 px-3">Overtime (+)</th>
-                          <th className="py-3 px-3">Late Cuts (-)</th>
-                          <th className="py-3 px-3">Absent Cuts (-)</th>
-                          <th className="py-3 px-3">Net Payable</th>
-                          <th className="py-3 px-3 text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 font-medium">
-                        {payrolls.map((payroll) => {
-                          const myLine = payroll.lines?.find((l) => l.employeeId === profile?.id);
-                          if (!myLine) return null;
-                          return (
-                            <tr key={payroll.id} className="hover:bg-indigo-50/30 transition-colors">
-                              <td className="py-3.5 px-3 font-bold text-slate-900">{payroll.month}</td>
-                              <td className="py-3.5 px-3 text-slate-700">
-                                {Number(myLine.basic || profile?.salary || 0).toLocaleString()} PKR
-                              </td>
-                              <td className="py-3.5 px-3 font-bold text-emerald-600">
-                                +{Number(myLine.overtimePay || 0).toLocaleString()} PKR ({myLine.totalOvertimeHours || 0}h)
-                              </td>
-                              <td className="py-3.5 px-3 font-semibold text-rose-600">
-                                -{Number(myLine.lateDeduction || 0).toLocaleString()} PKR
-                              </td>
-                              <td className="py-3.5 px-3 font-semibold text-rose-600">
-                                -{Number(myLine.absentDeduction || myLine.deductions || 0).toLocaleString()} PKR
-                              </td>
-                              <td className="py-3.5 px-3 font-black text-indigo-700 text-sm">
-                                {Number(myLine.netPay || 0).toLocaleString()} PKR
-                              </td>
-                              <td className="py-3.5 px-3 text-right">
-                                <button
-                                  onClick={() => viewPayslip(payroll.id, profile.id)}
-                                  className="rounded-xl border border-indigo-200 bg-indigo-50/80 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition"
-                                >
-                                  View Payslip 📄
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="sm:hidden text-center text-[10px] text-slate-400 pt-2.5">⇄ Swipe table horizontally to view full payslip breakdown</p>
+                <div className="mt-4 space-y-6">
+                  {payrolls.map((payroll) => {
+                    const myLine = payroll.lines?.find((l) => l.employeeId === profile?.id);
+                    if (!myLine) return null;
+
+                    const dailyRate = Math.round(Number(myLine.basic || profile?.salary || 0) / 30);
+                    const hourlyRate = Math.round(dailyRate / 8);
+                    const latePenaltyRate = Number(myLine.lateRate || Math.round(dailyRate * 0.5));
+
+                    return (
+                      <div key={payroll.id} className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-xs">
+                        {/* Month Header Banner */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-gradient-to-r from-slate-50 to-indigo-50/50 border-b border-slate-200">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <strong className="text-sm font-bold text-slate-900">Month: {payroll.month}</strong>
+                              <span className="rounded-full bg-emerald-100 text-emerald-800 px-2.5 py-0.5 text-[10px] font-bold">
+                                {payroll.status.toUpperCase()}
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-slate-500">
+                              Base: 30 Working Days · Basic Salary: <strong>{Number(myLine.basic || profile?.salary || 0).toLocaleString()} PKR</strong>
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-mono">
+                              Daily Rate: <strong className="text-indigo-700">{dailyRate.toLocaleString()} PKR</strong>
+                            </span>
+                            <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-mono">
+                              Hourly: <strong className="text-indigo-700">{hourlyRate.toLocaleString()} PKR</strong>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedMonthRecordEmpId(expandedMonthRecordEmpId === payroll.id ? null : payroll.id)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition flex items-center gap-1.5 ${
+                                expandedMonthRecordEmpId === payroll.id
+                                  ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                                  : "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
+                              }`}
+                            >
+                              <span>📅</span>
+                              <span>{expandedMonthRecordEmpId === payroll.id ? "Hide 30-Day Table" : "Poore Month Ka 30-Day Table"}</span>
+                            </button>
+                            <button
+                              onClick={() => viewPayslip(payroll.id, profile.id)}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition"
+                            >
+                              Print Official Slip 🖨
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Individual Calculation Table */}
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs divide-y divide-slate-100">
+                            <thead>
+                              <tr className="bg-slate-50/80 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                <th className="py-2.5 px-4">Calculation Item</th>
+                                <th className="py-2.5 px-4">Formula / Basis</th>
+                                <th className="py-2.5 px-4">Units / Count</th>
+                                <th className="py-2.5 px-4 text-right">Amount (PKR)</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 font-medium">
+                              {/* Basic Salary */}
+                              <tr className="hover:bg-slate-50/40">
+                                <td className="py-2.5 px-4 font-bold text-slate-800">Basic Monthly Base</td>
+                                <td className="py-2.5 px-4 text-slate-500">30 Working Days Base Month</td>
+                                <td className="py-2.5 px-4 font-semibold text-slate-700 font-mono">30 Days</td>
+                                <td className="py-2.5 px-4 text-right font-bold text-slate-900 font-mono">
+                                  +{Number(myLine.basic || profile?.salary || 0).toLocaleString()} PKR
+                                </td>
+                              </tr>
+
+                              {/* Attendance */}
+                              <tr className="hover:bg-slate-50/40">
+                                <td className="py-2.5 px-4 text-slate-700">Attendance (Present)</td>
+                                <td className="py-2.5 px-4 text-slate-500">Full Daily Duty Logged</td>
+                                <td className="py-2.5 px-4 text-emerald-700 font-semibold font-mono">
+                                  {myLine.presentDays || 0} Days Present
+                                </td>
+                                <td className="py-2.5 px-4 text-right text-emerald-600 font-mono font-semibold">
+                                  Included in Base
+                                </td>
+                              </tr>
+
+                              {/* Approved Paid Leaves */}
+                              <tr className="hover:bg-slate-50/40">
+                                <td className="py-2.5 px-4 text-slate-700">Approved Paid Leaves</td>
+                                <td className="py-2.5 px-4 text-slate-500">Casual / Sick / Annual (Salary Protected)</td>
+                                <td className="py-2.5 px-4 text-indigo-700 font-semibold font-mono">
+                                  {myLine.approvedPaidLeaves || 0} Days Approved
+                                </td>
+                                <td className="py-2.5 px-4 text-right text-indigo-600 font-mono font-semibold">
+                                  100% Paid (0 PKR)
+                                </td>
+                              </tr>
+
+                              {/* Overtime Pay */}
+                              <tr className="hover:bg-slate-50/40 bg-emerald-50/20">
+                                <td className="py-2.5 px-4 font-bold text-emerald-800">Overtime Addition (+)</td>
+                                <td className="py-2.5 px-4 text-emerald-700 font-mono">
+                                  1.5× Hourly Rate ({Math.round(hourlyRate * 1.5).toLocaleString()} PKR/hr)
+                                </td>
+                                <td className="py-2.5 px-4 text-emerald-800 font-semibold font-mono">
+                                  {myLine.totalOvertimeHours || 0} Hours OT
+                                </td>
+                                <td className="py-2.5 px-4 text-right font-bold text-emerald-700 font-mono">
+                                  +{Number(myLine.overtimePay || 0).toLocaleString()} PKR
+                                </td>
+                              </tr>
+
+                              {/* Absent Cut */}
+                              <tr className="hover:bg-slate-50/40 bg-rose-50/20">
+                                <td className="py-2.5 px-4 font-bold text-rose-800">Leaves / Absent Deduction (-)</td>
+                                <td className="py-2.5 px-4 text-rose-700 font-mono">
+                                  Daily Rate: Basic ÷ 30 ({dailyRate.toLocaleString()} PKR/day)
+                                </td>
+                                <td className="py-2.5 px-4 text-rose-800 font-semibold font-mono">
+                                  {myLine.absentDays || 0} Days Absent
+                                </td>
+                                <td className="py-2.5 px-4 text-right font-bold text-rose-700 font-mono">
+                                  -{Number(myLine.absentDeduction || myLine.deductions || 0).toLocaleString()} PKR
+                                </td>
+                              </tr>
+
+                              {/* Late Arrivals Cut (Exact Hourly Cut) */}
+                              <tr className="hover:bg-slate-50/40 bg-rose-50/20">
+                                <td className="py-2.5 px-4 font-bold text-rose-800">Late Arrival Cut (Exact Hourly Cut) (-)</td>
+                                <td className="py-2.5 px-4 text-rose-700 font-mono">
+                                  Hourly Rate: Basic ÷ 30 ÷ 8 ({hourlyRate.toLocaleString()} PKR/hr)
+                                </td>
+                                <td className="py-2.5 px-4 text-rose-800 font-semibold font-mono">
+                                  {myLine.totalLateHours || 0} Hours Late ({myLine.lateDays || 0} late days)
+                                </td>
+                                <td className="py-2.5 px-4 text-right font-bold text-rose-700 font-mono">
+                                  -{Number(myLine.lateDeduction || 0).toLocaleString()} PKR
+                                </td>
+                              </tr>
+                            </tbody>
+
+                            {/* Table Footer: Total Amount */}
+                            <tfoot>
+                              <tr className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white font-bold">
+                                <td colSpan={3} className="py-3.5 px-4 text-xs font-black uppercase tracking-wider text-indigo-200">
+                                  TOTAL PAYABLE AMOUNT (NET SALARY TRANSFERRED)
+                                </td>
+                                <td className="py-3.5 px-4 text-right text-base sm:text-lg font-black text-emerald-400 font-mono">
+                                  {Number(myLine.netPay || 0).toLocaleString()} PKR
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+
+                        {/* POORE MONTH KA 30-DAY RECORD TABLE FOR EMPLOYEE */}
+                        {expandedMonthRecordEmpId === payroll.id && (
+                          <div className="p-4 sm:p-5 bg-slate-900 text-white border-t border-slate-800">
+                            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800 mb-3">
+                              <div>
+                                <strong className="text-sm font-bold text-white flex items-center gap-2">
+                                  <span>📅</span> Poora 30-Day Monthly Attendance &amp; Salary Register ({payroll.month})
+                                </strong>
+                                <p className="text-[11px] text-slate-400 mt-0.5">
+                                  Standard 30 Days Month · Day-by-Day Attendance, Check-In/Out, Late Hours Cut, Overtime Pay &amp; Daily Wages
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2 text-xs">
+                                <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Daily: <strong className="text-indigo-300">{dailyRate.toLocaleString()} PKR</strong></span>
+                                <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Hourly: <strong className="text-emerald-300">{hourlyRate.toLocaleString()} PKR</strong></span>
+                              </div>
+                            </div>
+
+                            <div className="overflow-x-auto max-h-96 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950/70">
+                              <table className="w-full text-left text-xs divide-y divide-slate-800">
+                                <thead className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                  <tr>
+                                    <th className="py-2.5 px-3">Day / Date</th>
+                                    <th className="py-2.5 px-3">Status</th>
+                                    <th className="py-2.5 px-3">Check-In</th>
+                                    <th className="py-2.5 px-3">Check-Out</th>
+                                    <th className="py-2.5 px-3">Duty Hours</th>
+                                    <th className="py-2.5 px-3 text-rose-400">Late Hours Cut (-)</th>
+                                    <th className="py-2.5 px-3 text-emerald-400">Overtime (+)</th>
+                                    <th className="py-2.5 px-3 text-right">Day Net Earning</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800/60 font-medium">
+                                  {(myLine.monthlyRecords && myLine.monthlyRecords.length > 0 ? myLine.monthlyRecords : (() => {
+                                    const days = [];
+                                    const m = payroll.month || "2026-10";
+                                    const todayStr = new Date().toISOString().slice(0, 10);
+                                    for (let i = 1; i <= 30; i++) {
+                                      const dStr = `${m}-${String(i).padStart(2, "0")}`;
+                                      const dObj = new Date(`${dStr}T12:00:00Z`);
+                                      const dayOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][dObj.getUTCDay()];
+                                      const isFuture = dStr > todayStr;
+                                      const isToday = dStr === todayStr;
+                                      const rec = attendance.find((a) => a.date === dStr);
+                                      const lv = leaves.find((l) => l.status === "approved" && dStr >= l.startDate && dStr <= l.endDate);
+                                      let st = "absent";
+                                      let stLbl = "Absent (Cut)";
+                                      let dutyH = Number(rec?.totalWorkHours || 0);
+                                      let otH = Number(rec?.overtimeHours || (dutyH > 8 ? dutyH - 8 : 0));
+                                      let otPay = Math.round(otH * (hourlyRate * 1.5));
+                                      let ltH = 0;
+                                      let ltCut = 0;
+                                      let abCut = 0;
+                                      let dEarned = 0;
+                                      if (rec) {
+                                        if (dutyH >= 8.0) {
+                                          if (rec.status === "late" || rec.isLate) {
+                                            st = "late"; stLbl = "Present (Late)";
+                                            ltH = Number(rec.lateHours || 1);
+                                            ltCut = Math.round(ltH * hourlyRate);
+                                            dEarned = Math.round(dailyRate - ltCut + otPay);
+                                          } else {
+                                            st = "present"; stLbl = "Full Duty (8h)"; dEarned = Math.round(dailyRate + otPay);
+                                          }
+                                        } else if (dutyH > 0) {
+                                          const exactMinutes = Math.round(dutyH * 60);
+                                          st = "partial";
+                                          stLbl = exactMinutes < 60 ? `Duty: ${exactMinutes} mins` : `Duty: ${dutyH.toFixed(2)} hrs`;
+                                          dEarned = Math.round(dutyH * hourlyRate);
+                                          abCut = Math.max(0, Math.round((8 - dutyH) * hourlyRate));
+                                        } else {
+                                          st = "absent"; stLbl = "0 hrs duty"; abCut = dailyRate;
+                                        }
+                                      } else if (lv) {
+                                        st = "approved_leave"; stLbl = `Approved ${lv.leaveType} Leave`; dEarned = dailyRate;
+                                      } else if (isFuture) {
+                                        st = "upcoming"; stLbl = "Upcoming Date"; abCut = 0; dEarned = 0;
+                                      } else if (isToday) {
+                                        st = "pending_today"; stLbl = "Pending Today"; abCut = 0; dEarned = 0;
+                                      } else {
+                                        abCut = dailyRate;
+                                      }
+                                      days.push({ day: i, date: dStr, dayOfWeek, status: st, statusLabel: stLbl, checkInAt: rec?.checkInAt, checkOutAt: rec?.checkOutAt, dutyHours: dutyH, lateHours: ltH, lateCut: ltCut, overtimeHours: otH, overtimePay: otPay, absentCut: abCut, dayEarned: dEarned, isUpcoming: isFuture });
+                                    }
+                                    return days;
+                                  })()).map((day) => (
+                                    <tr key={day.day} className="hover:bg-slate-800/40">
+                                      <td className="py-2 px-3 font-mono font-bold text-slate-200">
+                                        Day {day.day} · {day.dayOfWeek}, {day.date}
+                                      </td>
+                                      <td className="py-2 px-3">
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                          day.isUpcoming || day.status === "upcoming" ? "bg-slate-800 text-slate-400 border border-slate-700" :
+                                          day.status === "pending_today" ? "bg-indigo-950/80 text-indigo-300 border border-indigo-700/60" :
+                                          day.status === "present" ? "bg-emerald-950 text-emerald-300 border border-emerald-800" :
+                                          day.status === "late" ? "bg-amber-950 text-amber-300 border border-amber-800" :
+                                          day.status === "partial" ? "bg-blue-950 text-blue-300 border border-blue-800" :
+                                          day.status === "half_day" ? "bg-purple-950 text-purple-300 border border-purple-800" :
+                                          day.status === "approved_leave" ? "bg-cyan-950 text-cyan-300 border border-cyan-800" :
+                                          "bg-rose-950 text-rose-300 border border-rose-800"
+                                        }`}>
+                                          {day.statusLabel || (day.isUpcoming || day.status === "upcoming" ? "Upcoming Date" : day.status)}
+                                        </span>
+                                      </td>
+                                      <td className="py-2 px-3 text-slate-300 font-mono">
+                                        {day.isUpcoming || day.status === "upcoming" ? <span className="text-slate-600">—</span> : formatTime(day.checkInAt)}
+                                      </td>
+                                      <td className="py-2 px-3 text-slate-300 font-mono">
+                                        {day.isUpcoming || day.status === "upcoming" ? <span className="text-slate-600">—</span> : formatTime(day.checkOutAt)}
+                                      </td>
+                                      <td className="py-2 px-3 font-mono text-slate-300">
+                                        {day.isUpcoming || day.status === "upcoming" ? (
+                                          <span className="text-slate-600">—</span>
+                                        ) : day.dutyHours > 0 ? (
+                                          day.dutyHours < 1 ? `${Math.round(day.dutyHours * 60)} mins` : `${day.dutyHours.toFixed(1)} hrs`
+                                        ) : "—"}
+                                      </td>
+                                      <td className="py-2 px-3 font-mono font-bold text-rose-400">
+                                        {!day.isUpcoming && day.lateHours > 0 ? `-${day.lateCut.toLocaleString()} PKR (${day.lateHours}h)` : <span className="text-slate-600 font-normal">—</span>}
+                                      </td>
+                                      <td className="py-2 px-3 font-mono font-bold text-emerald-400">
+                                        {!day.isUpcoming && day.overtimeHours > 0 ? `+${day.overtimePay.toLocaleString()} PKR (${day.overtimeHours}h)` : <span className="text-slate-600 font-normal">—</span>}
+                                      </td>
+                                      <td className="py-2 px-3 text-right font-mono font-bold text-slate-100">
+                                        {day.isUpcoming || day.status === "upcoming" ? (
+                                          <span className="text-slate-500 font-normal text-[11px]">— (Upcoming)</span>
+                                        ) : day.status === "pending_today" ? (
+                                          <span className="text-indigo-400/80 font-normal text-[11px]">— (Pending)</span>
+                                        ) : day.dayEarned > 0 ? (
+                                          <span className="text-emerald-400">+{day.dayEarned.toLocaleString()} PKR</span>
+                                        ) : (
+                                          <span className="text-rose-400">0 PKR (Cut)</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                                <tfoot className="sticky bottom-0 bg-slate-900 border-t-2 border-indigo-500 font-bold">
+                                  <tr>
+                                    <td colSpan={5} className="py-3 px-3 text-slate-300 text-xs font-bold uppercase tracking-wider">
+                                      Month Total ({payroll.month}): {myLine.presentDays || 0} Present · {myLine.approvedPaidLeaves || 0} Leaves · {myLine.absentDays || 0} Absents · {myLine.totalLateHours || 0}h Late · {myLine.totalOvertimeHours || 0}h OT
+                                    </td>
+                                    <td className="py-3 px-3 text-rose-400 font-mono text-xs">
+                                      Late: -{Number(myLine.lateDeduction || 0).toLocaleString()} PKR
+                                    </td>
+                                    <td className="py-3 px-3 text-emerald-400 font-mono text-xs">
+                                      OT: +{Number(myLine.overtimePay || 0).toLocaleString()} PKR
+                                    </td>
+                                    <td className="py-3 px-3 text-right font-mono text-sm text-emerald-400 font-black">
+                                      Total Net: {Number(myLine.netPay || 0).toLocaleString()} PKR
+                                    </td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -918,60 +1215,115 @@ export default function EmployeePage() {
             </div>
 
             <div className="mt-4 sm:mt-5 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-100">
+              {/* Rates & 30-Day Base Bar */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200 text-center font-mono">
                 <div>
-                  <span className="block text-[10px] text-slate-400 uppercase font-semibold">Working Days</span>
-                  <strong className="text-sm font-bold text-slate-800">{activePayslip.workingDays} days</strong>
+                  <span className="block text-[10px] text-slate-400 uppercase font-semibold">Standard Base</span>
+                  <strong className="text-xs font-bold text-slate-800">30 Working Days</strong>
                 </div>
                 <div>
-                  <span className="block text-[10px] text-slate-400 uppercase font-semibold">Per-Day Rate</span>
-                  <strong className="text-sm font-bold text-slate-800">{Math.round(activePayslip.perDayRate || 0).toLocaleString()} PKR</strong>
+                  <span className="block text-[10px] text-slate-400 uppercase font-semibold">Daily Rate (Base÷30)</span>
+                  <strong className="text-xs font-bold text-indigo-700">
+                    {Number(activePayslip.perDayRate || Math.round((activePayslip.basic || 0) / 30)).toLocaleString()} PKR
+                  </strong>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-slate-400 uppercase font-semibold">Hourly Rate (Daily÷8)</span>
+                  <strong className="text-xs font-bold text-indigo-700">
+                    {Number(activePayslip.hourlyRate || Math.round((activePayslip.basic || 0) / 240)).toLocaleString()} PKR
+                  </strong>
                 </div>
               </div>
 
-              <div>
-                <span className="block font-bold text-slate-700 mb-1.5 uppercase text-[10px]">Earnings</span>
-                <div className="rounded-xl border border-slate-200 divide-y divide-slate-100">
-                  <div className="flex justify-between p-2.5">
-                    <span className="text-slate-600">Basic Salary</span>
-                    <b className="text-slate-800">{Number(activePayslip.basic || activePayslip.basicSalary || 0).toLocaleString()} PKR</b>
-                  </div>
-                  <div className="flex justify-between p-2.5 text-emerald-700">
-                    <span>Overtime ({activePayslip.totalOvertimeHours || 0} hrs @ 1.5× rate)</span>
-                    <b className="font-extrabold">+{Number(activePayslip.overtimePay || 0).toLocaleString()} PKR</b>
-                  </div>
-                  <div className="flex justify-between p-2.5 bg-slate-50 font-bold">
-                    <span>Total Gross Earnings</span>
-                    <span className="text-indigo-700">{Number(activePayslip.gross || 0).toLocaleString()} PKR</span>
-                  </div>
-                </div>
+              {/* Complete Itemized Calculation Table */}
+              <div className="rounded-xl border border-slate-200 overflow-hidden">
+                <table className="w-full text-left text-xs divide-y divide-slate-100">
+                  <thead>
+                    <tr className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      <th className="py-2.5 px-3">Component</th>
+                      <th className="py-2.5 px-3">Formula / Basis</th>
+                      <th className="py-2.5 px-3">Units</th>
+                      <th className="py-2.5 px-3 text-right">Amount (PKR)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium">
+                    {/* Basic Salary */}
+                    <tr>
+                      <td className="py-2 px-3 font-bold text-slate-800">Basic Monthly Base</td>
+                      <td className="py-2 px-3 text-slate-500">30 Working Days Base</td>
+                      <td className="py-2 px-3 font-mono">30 Days</td>
+                      <td className="py-2 px-3 text-right font-bold text-slate-900 font-mono">
+                        +{Number(activePayslip.basic || activePayslip.basicSalary || 0).toLocaleString()} PKR
+                      </td>
+                    </tr>
+
+                    {/* Attendance Present */}
+                    <tr>
+                      <td className="py-2 px-3 text-slate-700">Attendance (Present)</td>
+                      <td className="py-2 px-3 text-slate-500">Full Daily Work Duty</td>
+                      <td className="py-2 px-3 text-emerald-700 font-mono font-semibold">{activePayslip.presentDays || 0} Days</td>
+                      <td className="py-2 px-3 text-right text-emerald-600 font-mono">Included in Base</td>
+                    </tr>
+
+                    {/* Approved Paid Leaves */}
+                    <tr>
+                      <td className="py-2 px-3 text-slate-700">Approved Paid Leaves</td>
+                      <td className="py-2 px-3 text-slate-500">Casual / Sick / Annual</td>
+                      <td className="py-2 px-3 text-indigo-700 font-mono font-semibold">{activePayslip.approvedPaidLeaves || 0} Days</td>
+                      <td className="py-2 px-3 text-right text-indigo-600 font-mono">100% Paid (0 PKR)</td>
+                    </tr>
+
+                    {/* Overtime Pay */}
+                    <tr className="bg-emerald-50/25">
+                      <td className="py-2 px-3 font-bold text-emerald-800">Overtime Addition (+)</td>
+                      <td className="py-2 px-3 text-emerald-700 font-mono">1.5× Hourly Rate</td>
+                      <td className="py-2 px-3 text-emerald-800 font-mono">{activePayslip.totalOvertimeHours || 0} hrs</td>
+                      <td className="py-2 px-3 text-right font-bold text-emerald-700 font-mono">
+                        +{Number(activePayslip.overtimePay || 0).toLocaleString()} PKR
+                      </td>
+                    </tr>
+
+                    {/* Absent Cut */}
+                    <tr className="bg-rose-50/25">
+                      <td className="py-2 px-3 font-bold text-rose-800">Absent / Unpaid Cut (-)</td>
+                      <td className="py-2 px-3 text-rose-700 font-mono">Daily Rate (Basic ÷ 30)</td>
+                      <td className="py-2 px-3 text-rose-800 font-mono">{activePayslip.absentDays || 0} days</td>
+                      <td className="py-2 px-3 text-right font-bold text-rose-700 font-mono">
+                        -{Number(activePayslip.absentDeduction || activePayslip.deductions || 0).toLocaleString()} PKR
+                      </td>
+                    </tr>
+
+                    {/* Late Penalty Cut (Exact Hourly Cut) */}
+                    <tr className="bg-rose-50/25">
+                      <td className="py-2 px-3 font-bold text-rose-800">Late Arrival Cut (-)</td>
+                      <td className="py-2 px-3 text-rose-700 font-mono">Hourly Cut: Basic ÷ 30 ÷ 8</td>
+                      <td className="py-2 px-3 text-rose-800 font-mono">{activePayslip.totalLateHours || 0} hrs late ({activePayslip.lateDays || 0} days)</td>
+                      <td className="py-2 px-3 text-right font-bold text-rose-700 font-mono">
+                        -{Number(activePayslip.lateDeduction || 0).toLocaleString()} PKR
+                      </td>
+                    </tr>
+                  </tbody>
+
+                  {/* Table Footer: Total Amount */}
+                  <tfoot>
+                    <tr className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white font-bold">
+                      <td colSpan={3} className="py-3 px-3 text-xs font-black uppercase tracking-wider text-indigo-200">
+                        TOTAL PAYABLE AMOUNT (NET SALARY)
+                      </td>
+                      <td className="py-3 px-3 text-right text-base font-black text-emerald-400 font-mono">
+                        {Number(activePayslip.netPay || 0).toLocaleString()} PKR
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
 
-              <div>
-                <span className="block font-bold text-slate-700 mb-1.5 uppercase text-[10px]">Deductions &amp; Tax</span>
-                <div className="rounded-xl border border-slate-200 divide-y divide-slate-100">
-                  <div className="flex justify-between p-2.5 text-rose-600">
-                    <span>Late Arrival Deductions ({activePayslip.lateDays || 0} times)</span>
-                    <b className="font-semibold">-{Number(activePayslip.lateDeduction || 0).toLocaleString()} PKR</b>
-                  </div>
-                  <div className="flex justify-between p-2.5 text-rose-600">
-                    <span>Absent &amp; Unpaid Leave ({activePayslip.absentDays || 0} days)</span>
-                    <b className="font-semibold">-{Number(activePayslip.absentDeduction || activePayslip.deductions || 0).toLocaleString()} PKR</b>
-                  </div>
-                  <div className="flex justify-between p-2.5 text-rose-600">
-                    <span>Income Tax</span>
-                    <b className="font-semibold">-{Number(activePayslip.tax || 0).toLocaleString()} PKR</b>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 p-4 text-white shadow-md shadow-indigo-500/25">
-                <div>
-                  <span className="block text-[10px] uppercase tracking-wider opacity-80">Net Payable Salary</span>
-                  <strong className="text-xl sm:text-2xl font-black">{Number(activePayslip.netPay || 0).toLocaleString()} PKR</strong>
-                </div>
-                <button onClick={() => window.print()} className="w-full sm:w-auto rounded-xl bg-white px-4 py-2 text-xs font-bold text-indigo-700 hover:bg-slate-50 shadow-xs">
-                  Print Payslip 🖨
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  onClick={() => window.print()}
+                  className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition shadow-xs"
+                >
+                  Print Official Payslip 🖨
                 </button>
               </div>
             </div>

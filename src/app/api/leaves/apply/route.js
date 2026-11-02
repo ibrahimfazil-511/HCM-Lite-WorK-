@@ -17,11 +17,22 @@ export async function POST(request) {
   } catch {
     return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
-  const employeeId = auth.user.role === "EMPLOYEE" ? auth.user.employeeId : payload?.employeeId;
-  if (!employeeId) return NextResponse.json({ error: "employeeId is required for HR and Admin applications." }, { status: 400 });
+
+  let employeeId = auth.user.role === "EMPLOYEE" ? auth.user.employeeId : payload?.employeeId;
   const store = await readStore();
-  const employee = (store.employees || []).find((candidate) => candidate.id === employeeId && candidate.isActive !== false);
-  if (!employee) return NextResponse.json({ error: "Employee not found." }, { status: 404 });
+  let employee = (store.employees || []).find((candidate) => candidate.id === employeeId);
+  if (!employee && auth.user.role === "EMPLOYEE") {
+    employee = (store.employees || []).find((c) =>
+      (c.userId && c.userId === auth.user.userId) ||
+      (c.email && String(c.email).toLowerCase() === String(auth.user.email || "").toLowerCase())
+    );
+    if (employee) {
+      employeeId = employee.id;
+    }
+  }
+
+  if (!employee) return NextResponse.json({ error: "Employee record not found." }, { status: 404 });
+
   const validation = validateLeaveRequest(payload, employeeId, store);
   if (validation.errors.length) {
     return NextResponse.json({ error: "Leave application cannot be submitted.", errors: validation.errors }, { status: 422 });

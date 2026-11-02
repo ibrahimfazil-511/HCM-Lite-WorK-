@@ -12,13 +12,32 @@ export async function POST(request, { params }) {
   const store = await readStore();
   const employee = (store.employees || []).find((candidate) => candidate.id === id);
   if (!employee) return NextResponse.json({ error: "Employee not found." }, { status: 404 });
+  
   const temporaryPassword = createTemporaryPassword();
-  const users = store.users.map((user) => user.id === employee.userId ? { ...user, passwordHash: null, mustChangePassword: true, isTempPassword: true } : user);
-  const targetUser = users.find((user) => user.id === employee.userId);
+  const users = (store.users || []).map((user) =>
+    user.id === employee.userId || user.email === employee.email
+      ? { ...user, passwordHash: null, mustChangePassword: true, isTempPassword: true }
+      : user
+  );
+  const targetUser = users.find((user) => user.id === employee.userId || user.email === employee.email);
   if (!targetUser) return NextResponse.json({ error: "Employee login account not found." }, { status: 404 });
+  
   targetUser.passwordHash = await hashPassword(temporaryPassword);
-  const emailDelivery = await sendEmployeeWelcomeEmail({ name: employee.name, email: employee.email, temporaryPassword, companyName: store.company?.name });
+  targetUser.mustChangePassword = true;
+  targetUser.isTempPassword = true;
+  
+  const emailDelivery = await sendEmployeeWelcomeEmail({
+    name: employee.name,
+    email: employee.email,
+    temporaryPassword,
+    companyName: store.company?.name,
+  });
   await writeStore({ ...store, users });
   await auditLog(auth.user, "EMPLOYEE_INVITE_RESENT", `employee:${id}`, null, { employeeId: id, email: employee.email, emailSent: emailDelivery.sent });
-  return NextResponse.json({ emailDelivery, temporaryPassword: emailDelivery.sent ? undefined : temporaryPassword });
+  return NextResponse.json({
+    success: true,
+    emailDelivery,
+    temporaryPassword,
+    employee: { id: employee.id, name: employee.name, email: employee.email },
+  });
 }

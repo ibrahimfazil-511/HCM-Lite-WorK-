@@ -25,9 +25,19 @@ export async function GET(request) {
   if (auth.user.role === "EMPLOYEE") results = results.filter((employee) => employee.id === auth.user.employeeId || employee.userId === auth.user.userId);
   if (search) results = results.filter((employee) => `${employee.name} ${employee.email} ${employee.designation}`.toLowerCase().includes(search));
   if (department) results = results.filter((employee) => employee.department === department);
-  const total = results.length;
+
+  const usersMap = new Map((store.users || []).map((u) => [u.id, u]));
+  const enrichedResults = results.map((emp) => {
+    const user = usersMap.get(emp.userId) || (store.users || []).find((u) => u.email === emp.email);
+    return {
+      ...emp,
+      mustChangePassword: Boolean(user?.mustChangePassword || user?.isTempPassword),
+    };
+  });
+
+  const total = enrichedResults.length;
   const start = (page - 1) * pageSize;
-  return NextResponse.json({ employees: results.slice(start, start + pageSize), pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) }, departments: DEPARTMENTS });
+  return NextResponse.json({ employees: enrichedResults.slice(start, start + pageSize), pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) }, departments: DEPARTMENTS });
 }
 
 export async function POST(request) {
@@ -38,10 +48,25 @@ export async function POST(request) {
   const store = await readStore();
   const validation = validateEmployee(payload, store.employees || []);
   if (validation.errors.length) return NextResponse.json({ error: "Employee validation failed.", errors: validation.errors }, { status: 422 });
-  const temporaryPassword = createTemporaryPassword();
+  
+  // Use provided temporary password or auto-generate one
+  const customTemp = typeof payload?.temporaryPassword === "string" ? payload.temporaryPassword.trim() : "";
+  const temporaryPassword = customTemp.length >= 6 ? customTemp : createTemporaryPassword();
+
   const userId = randomUUID();
   const employee = createEmployeeRecord(validation.employee, userId);
-  const user = { id: userId, name: employee.name, email: employee.email, passwordHash: await hashPassword(temporaryPassword), role: "EMPLOYEE", employeeId: employee.id, mustChangePassword: true, isTempPassword: true, isActive: true, createdAt: employee.createdAt };
+  const user = {
+    id: userId,
+    name: employee.name,
+    email: employee.email,
+    passwordHash: await hashPassword(temporaryPassword),
+    role: "EMPLOYEE",
+    employeeId: employee.id,
+    mustChangePassword: true,
+    isTempPassword: true,
+    isActive: true,
+    createdAt: employee.createdAt,
+  };
   await writeStore({ ...store, employees: [...(store.employees || []), employee], users: [...store.users, user] });
   const emailDelivery = await sendEmployeeWelcomeEmail({
     name: employee.name,
@@ -51,9 +76,12 @@ export async function POST(request) {
   });
   await auditLog(auth.user, "EMPLOYEE_CREATED", `employee:${employee.id}`, null, { ...employee, emailDelivery: { sent: emailDelivery.sent } });
   return NextResponse.json({
-    employee,
-    user: { id: user.id, email: user.email, role: user.role, employeeId: user.employeeId, mustChangePassword: true },
-    temporaryPassword: emailDelivery.sent ? undefined : temporaryPassword,
+    employee: {
+      ...employee,
+      mustChangePassword: true,
+    },
+    user: { id: user.id, email: user.email, role: user.role, employeeId: user.employeeId, mustChangePassword: true, isTempPassword: true },
+    temporaryPassword,
     emailDelivery,
   }, { status: 201 });
 }

@@ -93,6 +93,8 @@ export default function HRDashboard() {
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [activePayslip, setActivePayslip] = useState(null);
   const [createdLoginInfo, setCreatedLoginInfo] = useState(null);
+  const [copiedPassword, setCopiedPassword] = useState(false);
+  const [resendingInviteId, setResendingInviteId] = useState("");
 
   // Add Employee Form State
   const [employeeForm, setEmployeeForm] = useState({
@@ -103,6 +105,7 @@ export default function HRDashboard() {
     salary: "",
     phone: "",
     address: "",
+    temporaryPassword: "",
   });
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [submittingEmployee, setSubmittingEmployee] = useState(false);
@@ -115,6 +118,11 @@ export default function HRDashboard() {
   // Payroll draft form
   const [payrollMonth, setPayrollMonth] = useState("2026-10");
   const [runningPayroll, setRunningPayroll] = useState(false);
+  const [payrollViewMode, setPayrollViewMode] = useState("individual"); // "summary" | "individual"
+  const [payrollEmployeeFilter, setPayrollEmployeeFilter] = useState("all");
+  const [payrollSearch, setPayrollSearch] = useState("");
+  const [attendanceSearch, setAttendanceSearch] = useState("");
+  const [expandedMonthRecordEmpId, setExpandedMonthRecordEmpId] = useState(null);
 
   // Announcement Form State
   const [announcementForm, setAnnouncementForm] = useState({
@@ -275,6 +283,7 @@ export default function HRDashboard() {
         salary: "",
         phone: "",
         address: "",
+        temporaryPassword: "",
       });
       setShowAddEmployeeModal(false);
       setSuccessMsg(`Employee ${data.employee.name} registered successfully with login created in Supabase!`);
@@ -283,6 +292,34 @@ export default function HRDashboard() {
       setError(err.message);
     } finally {
       setSubmittingEmployee(false);
+    }
+  }
+
+  async function handleResendInvite(employeeId) {
+    setResendingInviteId(employeeId);
+    setError("");
+    setSuccessMsg("");
+    try {
+      const token = localStorage.getItem("hcm_token");
+      const res = await fetch(`/api/employees/${employeeId}/resend-invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      const data = await safeResponseJson(res, {});
+      if (!res.ok) throw new Error(data.error || "Failed to reset temporary password.");
+
+      setCreatedLoginInfo({
+        name: data.employee?.name || "Employee",
+        email: data.employee?.email || "",
+        temporaryPassword: data.temporaryPassword,
+        department: "",
+      });
+      setSuccessMsg(`Temporary password reset for ${data.employee?.name || "Employee"}!`);
+      await loadHRData();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setResendingInviteId("");
     }
   }
 
@@ -568,14 +605,14 @@ export default function HRDashboard() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <span className="grid h-8 w-8 place-items-center rounded-xl bg-violet-100 text-violet-700 font-bold text-xs border border-violet-200">
-                {userRole === "ADMIN" ? "AD" : "HR"}
+                HR
               </span>
               <div className="text-left">
                 <span className="block text-xs font-bold text-slate-800 leading-tight">
-                  {userRole === "ADMIN" ? "Mohammad Asif" : "Sarah Ahmed"}
+                  HR Portal
                 </span>
                 <span className="text-[10px] text-slate-400">
-                  {userRole === "ADMIN" ? "Administrator Access" : "People Ops (HR)"}
+                  People Operations (HR)
                 </span>
               </div>
             </div>
@@ -918,7 +955,7 @@ export default function HRDashboard() {
                       <TableHead>Department</TableHead>
                       <TableHead>Designation</TableHead>
                       <TableHead>Basic Salary</TableHead>
-                      <TableHead>Contact</TableHead>
+                      <TableHead>Password Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -952,17 +989,40 @@ export default function HRDashboard() {
                           <TableCell className="font-semibold text-slate-900 font-mono">
                             {(Number(emp.salary) || 0).toLocaleString()} PKR
                           </TableCell>
-                          <TableCell className="text-slate-500">{emp.phone || "—"}</TableCell>
+                          <TableCell>
+                            {emp.mustChangePassword ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-800 border border-amber-200">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                Temp Password (Pending Setup)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800 border border-emerald-200">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                Permanent Password Set
+                              </span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right">
-                            <button
-                              onClick={() => {
-                                setEditingEmployee(emp);
-                                setShowEditEmployeeModal(true);
-                              }}
-                              className="text-xs text-indigo-600 hover:text-indigo-800 font-bold hover:underline"
-                            >
-                              Edit Profile
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleResendInvite(emp.id)}
+                                disabled={resendingInviteId === emp.id}
+                                className="text-xs text-amber-700 hover:text-amber-900 font-bold hover:underline"
+                                title="Reset / View Temporary Password"
+                              >
+                                {resendingInviteId === emp.id ? "Resetting..." : "🔑 Reset Temp Pass"}
+                              </button>
+                              <span className="text-slate-200">|</span>
+                              <button
+                                onClick={() => {
+                                  setEditingEmployee(emp);
+                                  setShowEditEmployeeModal(true);
+                                }}
+                                className="text-xs text-indigo-600 hover:text-indigo-800 font-bold hover:underline"
+                              >
+                                Edit Profile
+                              </button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
@@ -984,7 +1044,26 @@ export default function HRDashboard() {
                   <p className="text-xs text-slate-400">Real-time arrival, departure, 8.0h duty hours, and overtime earned</p>
                 </div>
 
-                <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+                  {/* Attendance Search Bar */}
+                  <div className="relative flex-1 sm:w-60">
+                    <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search attendance by staff / dept..."
+                      value={attendanceSearch}
+                      onChange={(e) => setAttendanceSearch(e.target.value)}
+                      className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-xs"
+                    />
+                    {attendanceSearch && (
+                      <button
+                        onClick={() => setAttendanceSearch("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="date"
                     value={attendanceFilterDate}
@@ -1008,22 +1087,42 @@ export default function HRDashboard() {
                       <TableHead>Arrival (Check-In)</TableHead>
                       <TableHead>Departure (Check-Out)</TableHead>
                       <TableHead>Duty Hours (8h standard)</TableHead>
+                      <TableHead>Late Cut (-)</TableHead>
                       <TableHead>Overtime Earned</TableHead>
                       <TableHead className="text-right">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {todayAttendance.length === 0 ? (
+                    {todayAttendance
+                      .filter((rec) => {
+                        const emp = employeeMap.get(rec.employeeId);
+                        return `${emp?.name || ""} ${emp?.department || ""} ${rec.employeeId}`
+                          .toLowerCase()
+                          .includes(attendanceSearch.toLowerCase());
+                      })
+                      .length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-12 text-xs text-slate-400">
+                        <TableCell colSpan={7} className="text-center py-12 text-xs text-slate-400">
                           No attendance stamped for {formatDate(attendanceFilterDate || today)}.
                         </TableCell>
                       </TableRow>
                     ) : (
-                      todayAttendance.map((rec) => {
+                      todayAttendance
+                        .filter((rec) => {
+                          const emp = employeeMap.get(rec.employeeId);
+                          return `${emp?.name || ""} ${emp?.department || ""} ${rec.employeeId}`
+                            .toLowerCase()
+                            .includes(attendanceSearch.toLowerCase());
+                        })
+                        .map((rec) => {
                         const emp = employeeMap.get(rec.employeeId);
                         const hours = Number(rec.totalWorkHours || 0);
                         const overtime = Number(rec.overtimeHours || (hours > 8 ? hours - 8 : 0));
+                        const dailyRate = Math.round(Number(emp?.salary || 0) / 30);
+                        const hourlyRate = Math.round(dailyRate / 8);
+                        const isLateRec = rec.status === "late" || rec.isLate;
+                        const lateHours = Number(rec.lateHours || (isLateRec ? 1 : 0));
+                        const lateCut = Math.round(lateHours * hourlyRate);
 
                         return (
                           <TableRow key={rec.id} className="text-xs hover:bg-slate-50/60 transition">
@@ -1037,6 +1136,9 @@ export default function HRDashboard() {
                             <TableCell className="font-mono text-slate-700">{formatTime(rec.checkOutAt)}</TableCell>
                             <TableCell className="font-mono font-semibold text-slate-800">
                               {hours > 0 ? `${hours.toFixed(2)} hrs` : "Running..."}
+                            </TableCell>
+                            <TableCell className="font-mono text-rose-600 font-bold">
+                              {lateHours > 0 ? `-${lateCut.toLocaleString()} PKR (${lateHours}h)` : "—"}
                             </TableCell>
                             <TableCell>
                               {overtime > 0 ? (
@@ -1235,7 +1337,7 @@ export default function HRDashboard() {
                             </span>
                           </div>
                           <span className="text-xs text-slate-400">
-                            Total Employees: {(run.lines || run.items || []).length} staff included
+                            Standard 30-Day Working Month · {(run.lines || run.items || []).length} staff included
                           </span>
                         </div>
 
@@ -1245,49 +1347,465 @@ export default function HRDashboard() {
                         </div>
                       </div>
 
-                      {/* Employee Lines in this Payroll */}
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-slate-50/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                            <TableHead>Employee</TableHead>
-                            <TableHead>Basic Salary</TableHead>
-                            <TableHead>Overtime Pay</TableHead>
-                            <TableHead>Late/Absent Fines</TableHead>
-                            <TableHead>Income Tax</TableHead>
-                            <TableHead>Net Pay</TableHead>
-                            <TableHead className="text-right">Payslip</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {(run.lines || run.items || []).map((line) => (
-                            <TableRow key={line.employeeId} className="text-xs hover:bg-slate-50/60 transition">
-                              <TableCell className="font-bold text-slate-900">
-                                {line.employeeName}
-                                <span className="block text-[11px] text-slate-400 font-normal">{line.department}</span>
-                              </TableCell>
-                              <TableCell className="font-mono">{(line.basic || 0).toLocaleString()} PKR</TableCell>
-                              <TableCell className="font-mono text-emerald-600 font-semibold">
-                                +{(line.overtimePay || 0).toLocaleString()} PKR
-                              </TableCell>
-                              <TableCell className="font-mono text-rose-600 font-semibold">
-                                -{((line.lateDeduction || 0) + (line.absentDeduction || 0)).toLocaleString()} PKR
-                              </TableCell>
-                              <TableCell className="font-mono text-slate-500">-{(line.tax || 0).toLocaleString()} PKR</TableCell>
-                              <TableCell className="font-mono font-bold text-indigo-700">
-                                {(line.netPay || 0).toLocaleString()} PKR
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <button
-                                  onClick={() => viewEmployeePayslip(run.id, line.employeeId)}
-                                  className="text-xs text-indigo-600 hover:text-indigo-800 font-bold hover:underline"
-                                >
-                                  View Slip
-                                </button>
-                              </TableCell>
+                      {/* View Switcher: Individual Employee Tables vs Summary Table & Search */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200/80">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex items-center gap-1.5 p-1 bg-white rounded-xl border border-slate-200">
+                            <button
+                              type="button"
+                              onClick={() => setPayrollViewMode("individual")}
+                              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${
+                                payrollViewMode === "individual"
+                                  ? "bg-violet-600 text-white shadow-xs"
+                                  : "text-slate-600 hover:text-slate-900"
+                              }`}
+                            >
+                              👥 Har Employee Ka Alag Table ({(run.lines || run.items || []).length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPayrollViewMode("summary")}
+                              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${
+                                payrollViewMode === "summary"
+                                  ? "bg-violet-600 text-white shadow-xs"
+                                  : "text-slate-600 hover:text-slate-900"
+                              }`}
+                            >
+                              📊 Summary Master Table
+                            </button>
+                          </div>
+
+                          {payrollViewMode === "individual" && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-500 font-medium">Filter Staff:</span>
+                              <select
+                                value={payrollEmployeeFilter}
+                                onChange={(e) => setPayrollEmployeeFilter(e.target.value)}
+                                className="text-xs rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-slate-700 outline-none"
+                              >
+                                <option value="all">All Employees ({(run.lines || run.items || []).length})</option>
+                                {(run.lines || run.items || []).map((l) => (
+                                  <option key={l.employeeId} value={l.employeeId}>
+                                    {l.employeeName} ({l.department})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Search Bar for Payroll Workspace */}
+                        <div className="relative flex-1 min-w-[200px] max-w-xs">
+                          <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                          <input
+                            type="text"
+                            placeholder="Search employee (name, dept, role)..."
+                            value={payrollSearch}
+                            onChange={(e) => setPayrollSearch(e.target.value)}
+                            className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-xs"
+                          />
+                          {payrollSearch && (
+                            <button
+                              onClick={() => setPayrollSearch("")}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {payrollViewMode === "summary" ? (
+                        /* SUMMARY MASTER TABLE (FBR Tax Removed) */
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-slate-50/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                              <TableHead>Employee</TableHead>
+                              <TableHead>Basic Salary</TableHead>
+                              <TableHead>Overtime Pay</TableHead>
+                              <TableHead>Late Cuts (-PKR)</TableHead>
+                              <TableHead>Absent Cuts (-PKR)</TableHead>
+                              <TableHead>Net Pay</TableHead>
+                              <TableHead className="text-right">Payslip</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {(run.lines || run.items || [])
+                              .filter((line) =>
+                                `${line.employeeName} ${line.department} ${line.designation} ${line.employeeId}`
+                                  .toLowerCase()
+                                  .includes(payrollSearch.toLowerCase())
+                              )
+                              .map((line) => (
+                              <TableRow key={line.employeeId} className="text-xs hover:bg-slate-50/60 transition">
+                                <TableCell className="font-bold text-slate-900">
+                                  {line.employeeName}
+                                  <span className="block text-[11px] text-slate-400 font-normal">{line.department} · {line.designation || "Staff"}</span>
+                                </TableCell>
+                                <TableCell className="font-mono">{(line.basic || 0).toLocaleString()} PKR</TableCell>
+                                <TableCell className="font-mono text-emerald-600 font-semibold">
+                                  +{(line.overtimePay || 0).toLocaleString()} PKR
+                                </TableCell>
+                                <TableCell className="font-mono text-rose-600 font-semibold">
+                                  -{(line.lateDeduction || 0).toLocaleString()} PKR ({line.totalLateHours || line.lateDays || 0}h late)
+                                </TableCell>
+                                <TableCell className="font-mono text-rose-600 font-semibold">
+                                  -{(line.absentDeduction || 0).toLocaleString()} PKR ({line.absentDays || 0} abs)
+                                </TableCell>
+                                <TableCell className="font-mono font-bold text-indigo-700">
+                                  {(line.netPay || 0).toLocaleString()} PKR
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <button
+                                    onClick={() => viewEmployeePayslip(run.id, line.employeeId)}
+                                    className="text-xs text-indigo-600 hover:text-indigo-800 font-bold hover:underline"
+                                  >
+                                    View Slip
+                                  </button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      ) : (
+                        /* INDIVIDUAL DEDICATED CALCULATION TABLES FOR EACH EMPLOYEE */
+                        <div className="space-y-6 pt-2">
+                          {(run.lines || run.items || [])
+                            .filter((line) =>
+                              `${line.employeeName} ${line.department} ${line.designation} ${line.employeeId}`
+                                .toLowerCase()
+                                .includes(payrollSearch.toLowerCase())
+                            )
+                            .filter((l) => payrollEmployeeFilter === "all" || l.employeeId === payrollEmployeeFilter)
+                            .map((line) => {
+                              const dailyRate = Math.round(Number(line.basic || 0) / 30);
+                              const hourlyRate = Math.round(dailyRate / 8);
+                              const is30DayExpanded = expandedMonthRecordEmpId === line.employeeId;
+
+                              return (
+                                <div key={line.employeeId} className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-xs">
+                                  {/* Employee Header Ribbon */}
+                                  <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-gradient-to-r from-slate-50 to-violet-50/40 border-b border-slate-200">
+                                    <div className="flex items-center gap-3">
+                                      <span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-600 text-white font-extrabold text-sm shadow-sm">
+                                        {initials(line.employeeName)}
+                                      </span>
+                                      <div>
+                                        <div className="flex items-center gap-2">
+                                          <strong className="text-sm font-bold text-slate-900">{line.employeeName}</strong>
+                                          <span className="rounded-full bg-violet-100 text-violet-700 px-2.5 py-0.5 text-[10px] font-bold">
+                                            {line.department}
+                                          </span>
+                                        </div>
+                                        <span className="text-[11px] text-slate-500 font-medium">{line.designation || "Staff"} · Month: {run.month}</span>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                                      <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px]">
+                                        Basic: <strong className="text-slate-900 font-bold">{Number(line.basic || 0).toLocaleString()} PKR</strong>
+                                      </span>
+                                      <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px]">
+                                        30 Days Base | Daily: <strong className="text-violet-700 font-bold">{dailyRate.toLocaleString()} PKR</strong>
+                                      </span>
+                                      <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px]">
+                                        Hourly: <strong className="text-violet-700 font-bold">{hourlyRate.toLocaleString()} PKR</strong>
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setExpandedMonthRecordEmpId(is30DayExpanded ? null : line.employeeId)}
+                                        className={`px-3 py-1 text-xs font-bold rounded-lg border transition flex items-center gap-1.5 ${
+                                          is30DayExpanded
+                                            ? "bg-violet-600 text-white border-violet-600 shadow-xs"
+                                            : "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100"
+                                        }`}
+                                      >
+                                        <span>📅</span>
+                                        <span>{is30DayExpanded ? "Hide 30-Day Table" : "Poore Month Ka 30-Day Table"}</span>
+                                      </button>
+                                      <button
+                                        onClick={() => viewEmployeePayslip(run.id, line.employeeId)}
+                                        className="h-7 px-3 rounded-lg text-xs font-bold bg-white text-violet-700 hover:bg-slate-50 border border-violet-200 transition"
+                                      >
+                                        Print Slip 🖨
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Detailed Calculation Table */}
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-xs divide-y divide-slate-100">
+                                      <thead>
+                                        <tr className="bg-slate-50/80 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                          <th className="py-2.5 px-4">Component</th>
+                                          <th className="py-2.5 px-4">Formula / Calculation Basis</th>
+                                          <th className="py-2.5 px-4">Units / Count</th>
+                                          <th className="py-2.5 px-4 text-right">Amount (PKR)</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-100 font-medium">
+                                        {/* Basic Salary */}
+                                        <tr className="hover:bg-slate-50/50">
+                                          <td className="py-2.5 px-4 font-bold text-slate-800">
+                                            Basic Monthly Salary
+                                          </td>
+                                          <td className="py-2.5 px-4 text-slate-500">Standard 30 Days Base Working Month</td>
+                                          <td className="py-2.5 px-4 font-semibold text-slate-700">30 Days</td>
+                                          <td className="py-2.5 px-4 text-right font-bold text-slate-900 font-mono">
+                                            +{Number(line.basic || 0).toLocaleString()} PKR
+                                          </td>
+                                        </tr>
+
+                                        {/* Attendance Present */}
+                                        <tr className="hover:bg-slate-50/50">
+                                          <td className="py-2.5 px-4 text-slate-700">Attendance (Present Days)</td>
+                                          <td className="py-2.5 px-4 text-slate-500">Daily Arrival &amp; Duty Recorded</td>
+                                          <td className="py-2.5 px-4 font-semibold text-emerald-700 font-mono">
+                                            {line.presentDays || 0} Days Present
+                                          </td>
+                                          <td className="py-2.5 px-4 text-right text-emerald-600 font-semibold font-mono">
+                                            Included in Base
+                                          </td>
+                                        </tr>
+
+                                        {/* Approved Paid Leaves */}
+                                        <tr className="hover:bg-slate-50/50">
+                                          <td className="py-2.5 px-4 text-slate-700">Approved Paid Leaves</td>
+                                          <td className="py-2.5 px-4 text-slate-500">Casual / Sick / Annual (Quota Protected)</td>
+                                          <td className="py-2.5 px-4 font-semibold text-violet-700 font-mono">
+                                            {line.approvedPaidLeaves || 0} Days Approved
+                                          </td>
+                                          <td className="py-2.5 px-4 text-right text-violet-600 font-semibold font-mono">
+                                            100% Paid (No Cut)
+                                          </td>
+                                        </tr>
+
+                                        {/* Overtime */}
+                                        <tr className="hover:bg-slate-50/50 bg-emerald-50/20">
+                                          <td className="py-2.5 px-4 font-bold text-emerald-800">
+                                            Overtime Pay Addition (+)
+                                          </td>
+                                          <td className="py-2.5 px-4 text-emerald-700 font-mono">
+                                            1.5× Hourly Rate ({Math.round(hourlyRate * 1.5).toLocaleString()} PKR/hr)
+                                          </td>
+                                          <td className="py-2.5 px-4 font-semibold text-emerald-800 font-mono">
+                                            {line.totalOvertimeHours || 0} Hours OT
+                                          </td>
+                                          <td className="py-2.5 px-4 text-right font-bold text-emerald-700 font-mono">
+                                            +{Number(line.overtimePay || 0).toLocaleString()} PKR
+                                          </td>
+                                        </tr>
+
+                                        {/* Absent / Leaves Cut */}
+                                        <tr className="hover:bg-slate-50/50 bg-rose-50/20">
+                                          <td className="py-2.5 px-4 font-bold text-rose-800">
+                                            Leaves / Absent Deduction (-)
+                                          </td>
+                                          <td className="py-2.5 px-4 text-rose-700 font-mono">
+                                            Daily Rate: Basic ÷ 30 ({dailyRate.toLocaleString()} PKR/day)
+                                          </td>
+                                          <td className="py-2.5 px-4 font-semibold text-rose-800 font-mono">
+                                            {line.absentDays || 0} Days Absent
+                                          </td>
+                                          <td className="py-2.5 px-4 text-right font-bold text-rose-700 font-mono">
+                                            -{Number(line.absentDeduction || 0).toLocaleString()} PKR
+                                          </td>
+                                        </tr>
+
+                                        {/* Late Arrivals Cut (Exact Hourly Cut) */}
+                                        <tr className="hover:bg-slate-50/50 bg-rose-50/20">
+                                          <td className="py-2.5 px-4 font-bold text-rose-800">
+                                            Late Arrival Cut (Exact Hourly Cut) (-)
+                                          </td>
+                                          <td className="py-2.5 px-4 text-rose-700 font-mono">
+                                            Hourly Rate Cut: Basic ÷ 30 ÷ 8 ({hourlyRate.toLocaleString()} PKR/hr)
+                                          </td>
+                                          <td className="py-2.5 px-4 font-semibold text-rose-800 font-mono">
+                                            {line.totalLateHours || 0} Hours Late ({line.lateDays || 0} late days)
+                                          </td>
+                                          <td className="py-2.5 px-4 text-right font-bold text-rose-700 font-mono">
+                                            -{Number(line.lateDeduction || 0).toLocaleString()} PKR
+                                          </td>
+                                        </tr>
+                                      </tbody>
+
+                                      {/* Table Footer: Total Amount */}
+                                      <tfoot>
+                                        <tr className="bg-gradient-to-r from-slate-900 via-violet-950 to-slate-900 text-white font-bold">
+                                          <td colSpan={3} className="py-3.5 px-4 text-xs font-black uppercase tracking-wider text-violet-200">
+                                            TOTAL PAYABLE AMOUNT (NET SALARY TRANSFERRED)
+                                          </td>
+                                          <td className="py-3.5 px-4 text-right text-base sm:text-lg font-black text-emerald-400 font-mono">
+                                            {Number(line.netPay || 0).toLocaleString()} PKR
+                                          </td>
+                                        </tr>
+                                      </tfoot>
+                                    </table>
+                                  </div>
+
+                                  {/* POORE MONTH KA 30-DAY RECORD TABLE */}
+                                  {is30DayExpanded && (
+                                    <div className="p-4 sm:p-5 bg-slate-900 text-white border-t border-slate-800">
+                                      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800 mb-3">
+                                        <div>
+                                          <strong className="text-sm font-bold text-white flex items-center gap-2">
+                                            <span>📅</span> Poora 30-Day Monthly Attendance &amp; Salary Register — {line.employeeName} ({run.month})
+                                          </strong>
+                                          <p className="text-[11px] text-slate-400 mt-0.5">
+                                            Standard 30 Days Month · Day-by-Day Attendance, Check-In/Out, Late Hours Cut, Overtime Pay &amp; Daily Wages
+                                          </p>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                                          <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Basic: <strong className="text-white">{Number(line.basic || 0).toLocaleString()} PKR</strong></span>
+                                          <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Daily: <strong className="text-violet-300">{dailyRate.toLocaleString()} PKR</strong></span>
+                                          <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Hourly: <strong className="text-emerald-300">{hourlyRate.toLocaleString()} PKR</strong></span>
+                                        </div>
+                                      </div>
+
+                                      <div className="overflow-x-auto max-h-96 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950/70">
+                                        <table className="w-full text-left text-xs divide-y divide-slate-800">
+                                          <thead className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                            <tr>
+                                              <th className="py-2.5 px-3">Day / Date</th>
+                                              <th className="py-2.5 px-3">Status</th>
+                                              <th className="py-2.5 px-3">Check-In</th>
+                                              <th className="py-2.5 px-3">Check-Out</th>
+                                              <th className="py-2.5 px-3">Duty Hours</th>
+                                              <th className="py-2.5 px-3 text-rose-400">Late Hours Cut (-)</th>
+                                              <th className="py-2.5 px-3 text-emerald-400">Overtime (+)</th>
+                                              <th className="py-2.5 px-3 text-right">Day Net Earning</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="divide-y divide-slate-800/60 font-medium">
+                                            {(line.monthlyRecords && line.monthlyRecords.length > 0 ? line.monthlyRecords : (() => {
+                                              const days = [];
+                                              const m = run.month || "2026-10";
+                                              const todayStr = new Date().toISOString().slice(0, 10);
+                                              for (let i = 1; i <= 30; i++) {
+                                                const dStr = `${m}-${String(i).padStart(2, "0")}`;
+                                                const dObj = new Date(`${dStr}T12:00:00Z`);
+                                                const dayOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][dObj.getUTCDay()];
+                                                const isFuture = dStr > todayStr;
+                                                const isToday = dStr === todayStr;
+                                                const rec = attendance.find((a) => a.employeeId === line.employeeId && a.date === dStr);
+                                                const lv = leaves.find((l) => l.employeeId === line.employeeId && l.status === "approved" && dStr >= l.startDate && dStr <= l.endDate);
+                                                let st = "absent";
+                                                let stLbl = "Absent (Cut)";
+                                                let dutyH = Number(rec?.totalWorkHours || 0);
+                                                let otH = Number(rec?.overtimeHours || (dutyH > 8 ? dutyH - 8 : 0));
+                                                let otPay = Math.round(otH * (hourlyRate * 1.5));
+                                                let ltH = 0;
+                                                let ltCut = 0;
+                                                let abCut = 0;
+                                                let dEarned = 0;
+                                                if (rec) {
+                                                  if (dutyH >= 8.0) {
+                                                    if (rec.status === "late" || rec.isLate) {
+                                                      st = "late"; stLbl = "Present (Late)";
+                                                      ltH = Number(rec.lateHours || 1);
+                                                      ltCut = Math.round(ltH * hourlyRate);
+                                                      dEarned = Math.round(dailyRate - ltCut + otPay);
+                                                    } else {
+                                                      st = "present"; stLbl = "Full Duty (8h)"; dEarned = Math.round(dailyRate + otPay);
+                                                    }
+                                                  } else if (dutyH > 0) {
+                                                    const exactMinutes = Math.round(dutyH * 60);
+                                                    st = "partial";
+                                                    stLbl = exactMinutes < 60 ? `Duty: ${exactMinutes} mins` : `Duty: ${dutyH.toFixed(2)} hrs`;
+                                                    dEarned = Math.round(dutyH * hourlyRate);
+                                                    abCut = Math.max(0, Math.round((8 - dutyH) * hourlyRate));
+                                                  } else {
+                                                    st = "absent"; stLbl = "0 hrs duty"; abCut = dailyRate;
+                                                  }
+                                                } else if (lv) {
+                                                  st = "approved_leave"; stLbl = `Approved ${lv.leaveType} Leave`; dEarned = dailyRate;
+                                                } else if (isFuture) {
+                                                  st = "upcoming"; stLbl = "Upcoming Date"; abCut = 0; dEarned = 0;
+                                                } else if (isToday) {
+                                                  st = "pending_today"; stLbl = "Pending Today"; abCut = 0; dEarned = 0;
+                                                } else {
+                                                  abCut = dailyRate;
+                                                }
+                                                days.push({ day: i, date: dStr, dayOfWeek, status: st, statusLabel: stLbl, checkInAt: rec?.checkInAt, checkOutAt: rec?.checkOutAt, dutyHours: dutyH, lateHours: ltH, lateCut: ltCut, overtimeHours: otH, overtimePay: otPay, absentCut: abCut, dayEarned: dEarned, isUpcoming: isFuture });
+                                              }
+                                              return days;
+                                            })()).map((day) => (
+                                              <tr key={day.day} className="hover:bg-slate-800/40">
+                                                <td className="py-2 px-3 font-mono font-bold text-slate-200">
+                                                  Day {day.day} · {day.dayOfWeek}, {day.date}
+                                                </td>
+                                                <td className="py-2 px-3">
+                                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                                    day.isUpcoming || day.status === "upcoming" ? "bg-slate-800 text-slate-400 border border-slate-700" :
+                                                    day.status === "pending_today" ? "bg-indigo-950/80 text-indigo-300 border border-indigo-700/60" :
+                                                    day.status === "present" ? "bg-emerald-950 text-emerald-300 border border-emerald-800" :
+                                                    day.status === "late" ? "bg-amber-950 text-amber-300 border border-amber-800" :
+                                                    day.status === "partial" ? "bg-blue-950 text-blue-300 border border-blue-800" :
+                                                    day.status === "half_day" ? "bg-purple-950 text-purple-300 border border-purple-800" :
+                                                    day.status === "approved_leave" ? "bg-cyan-950 text-cyan-300 border border-cyan-800" :
+                                                    "bg-rose-950 text-rose-300 border border-rose-800"
+                                                  }`}>
+                                                    {day.statusLabel || (day.isUpcoming || day.status === "upcoming" ? "Upcoming Date" : day.status)}
+                                                  </span>
+                                                </td>
+                                                <td className="py-2 px-3 text-slate-300 font-mono">
+                                                  {day.isUpcoming || day.status === "upcoming" ? <span className="text-slate-600">—</span> : formatTime(day.checkInAt)}
+                                                </td>
+                                                <td className="py-2 px-3 text-slate-300 font-mono">
+                                                  {day.isUpcoming || day.status === "upcoming" ? <span className="text-slate-600">—</span> : formatTime(day.checkOutAt)}
+                                                </td>
+                                                <td className="py-2 px-3 font-mono text-slate-300">
+                                                  {day.isUpcoming || day.status === "upcoming" ? (
+                                                        <span className="text-slate-600">—</span>
+                                                      ) : day.dutyHours > 0 ? (
+                                                        day.dutyHours < 1 ? `${Math.round(day.dutyHours * 60)} mins` : `${day.dutyHours.toFixed(1)} hrs`
+                                                      ) : "—"}
+                                                </td>
+                                                <td className="py-2 px-3 font-mono font-bold text-rose-400">
+                                                  {!day.isUpcoming && day.lateHours > 0 ? `-${day.lateCut.toLocaleString()} PKR (${day.lateHours}h)` : <span className="text-slate-600 font-normal">—</span>}
+                                                </td>
+                                                <td className="py-2 px-3 font-mono font-bold text-emerald-400">
+                                                  {!day.isUpcoming && day.overtimeHours > 0 ? `+${day.overtimePay.toLocaleString()} PKR (${day.overtimeHours}h)` : <span className="text-slate-600 font-normal">—</span>}
+                                                </td>
+                                                <td className="py-2 px-3 text-right font-mono font-bold text-slate-100">
+                                                  {day.isUpcoming || day.status === "upcoming" ? (
+                                                    <span className="text-slate-500 font-normal text-[11px]">— (Upcoming)</span>
+                                                  ) : day.status === "pending_today" ? (
+                                                    <span className="text-indigo-400/80 font-normal text-[11px]">— (Pending)</span>
+                                                  ) : day.dayEarned > 0 ? (
+                                                    <span className="text-emerald-400">+{day.dayEarned.toLocaleString()} PKR</span>
+                                                  ) : (
+                                                    <span className="text-rose-400">0 PKR (Cut)</span>
+                                                  )}
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                          <tfoot className="sticky bottom-0 bg-slate-900 border-t-2 border-violet-500 font-bold">
+                                            <tr>
+                                              <td colSpan={5} className="py-3 px-3 text-slate-300 text-xs font-bold uppercase tracking-wider">
+                                                Month Total ({run.month}): {line.presentDays || 0} Present · {line.approvedPaidLeaves || 0} Leaves · {line.absentDays || 0} Absents · {line.totalLateHours || 0}h Late · {line.totalOvertimeHours || 0}h OT
+                                              </td>
+                                              <td className="py-3 px-3 text-rose-400 font-mono text-xs">
+                                                Late: -{Number(line.lateDeduction || 0).toLocaleString()} PKR
+                                              </td>
+                                              <td className="py-3 px-3 text-emerald-400 font-mono text-xs">
+                                                OT: +{Number(line.overtimePay || 0).toLocaleString()} PKR
+                                              </td>
+                                              <td className="py-3 px-3 text-right font-mono text-sm text-emerald-400 font-black">
+                                                Total Net: {Number(line.netPay || 0).toLocaleString()} PKR
+                                              </td>
+                                            </tr>
+                                          </tfoot>
+                                        </table>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
@@ -1431,6 +1949,30 @@ export default function HRDashboard() {
                   value={employeeForm.address}
                   onChange={(e) => setEmployeeForm({ ...employeeForm, address: e.target.value })}
                 />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Label>Initial Temporary Password (Optional)</Label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rand = "Welcome@" + Math.random().toString(36).slice(-6);
+                      setEmployeeForm({ ...employeeForm, temporaryPassword: rand });
+                    }}
+                    className="text-[10px] text-indigo-600 font-bold hover:underline"
+                  >
+                    🎲 Auto-generate
+                  </button>
+                </div>
+                <Input
+                  placeholder="Leave empty for auto-generated (e.g. Welcome@abcd1234)"
+                  value={employeeForm.temporaryPassword || ""}
+                  onChange={(e) => setEmployeeForm({ ...employeeForm, temporaryPassword: e.target.value })}
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  The employee will use this temporary password to sign in for the first time, and will be prompted to create their own permanent password.
+                </p>
               </div>
 
               <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-slate-100">
@@ -1647,49 +2189,191 @@ export default function HRDashboard() {
       {/* PAYSLIP DETAIL MODAL                                     */}
       {/* -------------------------------------------------------- */}
       {activePayslip && (
-        <Dialog open={Boolean(activePayslip)} onClose={() => setActivePayslip(null)} className="max-w-lg">
-          <div className="space-y-4">
+        <Dialog open={Boolean(activePayslip)} onClose={() => setActivePayslip(null)} className="max-w-xl">
+          <div className="space-y-4 text-xs">
             <DialogHeader>
-              <DialogTitle className="text-base font-bold text-slate-900">Official Payslip Details</DialogTitle>
+              <div>
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-violet-600">Official Payslip Details</span>
+                <DialogTitle className="text-xl">{activePayslip.employeeName}</DialogTitle>
+                <p className="text-xs text-slate-500">{activePayslip.department} · {activePayslip.month}</p>
+              </div>
             </DialogHeader>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs space-y-2">
-              <div className="flex justify-between border-b pb-2">
-                <span>Employee:</span>
-                <strong>{activePayslip.employeeName}</strong>
+            {/* Rates & 30-Day Base Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200 text-center font-mono">
+              <div>
+                <span className="block text-[10px] text-slate-400 uppercase font-semibold">Standard Base</span>
+                <strong className="text-xs font-bold text-slate-800">30 Working Days</strong>
               </div>
-              <div className="flex justify-between">
-                <span>Month:</span>
-                <span>{activePayslip.month}</span>
+              <div>
+                <span className="block text-[10px] text-slate-400 uppercase font-semibold">Per-Day Salary</span>
+                <strong className="text-xs font-bold text-violet-700">
+                  {Number(activePayslip.perDayRate || Math.round((activePayslip.basic || 0) / 30)).toLocaleString()} PKR
+                </strong>
               </div>
-              <div className="flex justify-between">
-                <span>Basic Salary:</span>
-                <span>{(activePayslip.basic || 0).toLocaleString()} PKR</span>
-              </div>
-              <div className="flex justify-between text-emerald-600">
-                <span>Overtime ({activePayslip.totalOvertimeHours || 0} hrs @ 1.5×):</span>
-                <span>+{(activePayslip.overtimePay || 0).toLocaleString()} PKR</span>
-              </div>
-              <div className="flex justify-between text-rose-600">
-                <span>Late Deductions ({activePayslip.lateDays || 0} days):</span>
-                <span>-{(activePayslip.lateDeduction || 0).toLocaleString()} PKR</span>
-              </div>
-              <div className="flex justify-between text-rose-600">
-                <span>Absent Deductions ({activePayslip.absentDays || 0} days):</span>
-                <span>-{(activePayslip.absentDeduction || 0).toLocaleString()} PKR</span>
-              </div>
-              <div className="flex justify-between text-slate-500">
-                <span>Income Tax:</span>
-                <span>-{(activePayslip.tax || 0).toLocaleString()} PKR</span>
-              </div>
-              <div className="flex justify-between border-t pt-2 text-sm font-bold text-indigo-700">
-                <span>Net Payable Salary:</span>
-                <span>{(activePayslip.netPay || 0).toLocaleString()} PKR</span>
+              <div>
+                <span className="block text-[10px] text-slate-400 uppercase font-semibold">Hourly Rate (8h)</span>
+                <strong className="text-xs font-bold text-violet-700">
+                  {Number(activePayslip.hourlyRate || Math.round((activePayslip.basic || 0) / 240)).toLocaleString()} PKR
+                </strong>
               </div>
             </div>
 
-            <div className="flex justify-end">
-              <Button onClick={() => setActivePayslip(null)} className="bg-slate-800 text-white w-full sm:w-auto">Close</Button>
+            {/* Complete Itemized Calculation Table */}
+            <div className="rounded-xl border border-slate-200 overflow-hidden">
+              <table className="w-full text-left text-xs divide-y divide-slate-100">
+                <thead>
+                  <tr className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    <th className="py-2.5 px-3">Component</th>
+                    <th className="py-2.5 px-3">Formula / Basis</th>
+                    <th className="py-2.5 px-3">Units</th>
+                    <th className="py-2.5 px-3 text-right">Amount (PKR)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {/* Basic Salary */}
+                  <tr>
+                    <td className="py-2 px-3 font-bold text-slate-800">Basic Monthly Base</td>
+                    <td className="py-2 px-3 text-slate-500">30 Working Days Base</td>
+                    <td className="py-2 px-3 font-mono">30 Days</td>
+                    <td className="py-2 px-3 text-right font-bold text-slate-900 font-mono">
+                      +{Number(activePayslip.basic || activePayslip.basicSalary || 0).toLocaleString()} PKR
+                    </td>
+                  </tr>
+
+                  {/* Attendance Present */}
+                  <tr>
+                    <td className="py-2 px-3 text-slate-700">Attendance (Present)</td>
+                    <td className="py-2 px-3 text-slate-500">Full Daily Work Duty</td>
+                    <td className="py-2 px-3 text-emerald-700 font-mono font-semibold">{activePayslip.presentDays || 0} Days</td>
+                    <td className="py-2 px-3 text-right text-emerald-600 font-mono">Included in Base</td>
+                  </tr>
+
+                  {/* Approved Paid Leaves */}
+                  <tr>
+                    <td className="py-2 px-3 text-slate-700">Approved Paid Leaves</td>
+                    <td className="py-2 px-3 text-slate-500">Casual / Sick / Annual</td>
+                    <td className="py-2 px-3 text-violet-700 font-mono font-semibold">{activePayslip.approvedPaidLeaves || 0} Days</td>
+                    <td className="py-2 px-3 text-right text-violet-600 font-mono">100% Paid (0 PKR)</td>
+                  </tr>
+
+                  {/* Overtime Pay */}
+                  <tr className="bg-emerald-50/25">
+                    <td className="py-2 px-3 font-bold text-emerald-800">Overtime Addition (+)</td>
+                    <td className="py-2 px-3 text-emerald-700 font-mono">1.5× Hourly Rate</td>
+                    <td className="py-2 px-3 text-emerald-800 font-mono">{activePayslip.totalOvertimeHours || 0} hrs</td>
+                    <td className="py-2 px-3 text-right font-bold text-emerald-700 font-mono">
+                      +{Number(activePayslip.overtimePay || 0).toLocaleString()} PKR
+                    </td>
+                  </tr>
+
+                  {/* Absent Cut */}
+                  <tr className="bg-rose-50/25">
+                    <td className="py-2 px-3 font-bold text-rose-800">Absent / Unpaid Cut (-)</td>
+                    <td className="py-2 px-3 text-rose-700 font-mono">Daily Rate (Basic ÷ 30)</td>
+                    <td className="py-2 px-3 text-rose-800 font-mono">{activePayslip.absentDays || 0} days</td>
+                    <td className="py-2 px-3 text-right font-bold text-rose-700 font-mono">
+                      -{Number(activePayslip.absentDeduction || activePayslip.deductions || 0).toLocaleString()} PKR
+                    </td>
+                  </tr>
+
+                  {/* Late Penalty Cut (Exact Hourly Cut) */}
+                  <tr className="bg-rose-50/25">
+                    <td className="py-2 px-3 font-bold text-rose-800">Late Arrival Cut (-)</td>
+                    <td className="py-2 px-3 text-rose-700 font-mono">Hourly Cut: Basic ÷ 30 ÷ 8</td>
+                    <td className="py-2 px-3 text-rose-800 font-mono">{activePayslip.totalLateHours || 0} hrs late ({activePayslip.lateDays || 0} days)</td>
+                    <td className="py-2 px-3 text-right font-bold text-rose-700 font-mono">
+                      -{Number(activePayslip.lateDeduction || 0).toLocaleString()} PKR
+                    </td>
+                  </tr>
+                </tbody>
+
+                <tfoot>
+                  <tr className="bg-gradient-to-r from-slate-900 via-violet-950 to-slate-900 text-white font-bold">
+                    <td colSpan={3} className="py-3 px-3 text-xs font-black uppercase tracking-wider text-violet-200">
+                      TOTAL PAYABLE AMOUNT (NET SALARY)
+                    </td>
+                    <td className="py-3 px-3 text-right text-base font-black text-emerald-400 font-mono">
+                      {Number(activePayslip.netPay || 0).toLocaleString()} PKR
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button onClick={() => setActivePayslip(null)} variant="outline" size="sm" className="bg-slate-100">
+                Close
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => window.print()}
+                className="bg-violet-600 hover:bg-violet-500 text-white font-bold"
+              >
+                Print Official Slip 🖨
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* -------------------------------------------------------- */}
+      {/* TEMPORARY LOGIN CREDENTIALS MODAL                        */}
+      {/* -------------------------------------------------------- */}
+      {createdLoginInfo && (
+        <Dialog open={Boolean(createdLoginInfo)} onClose={() => setCreatedLoginInfo(null)} className="max-w-md">
+          <div className="space-y-4">
+            <DialogHeader>
+              <div className="flex items-center gap-2 text-emerald-600">
+                <IconShieldCheck className="w-5 h-5 text-emerald-600" />
+                <DialogTitle className="text-base font-bold text-slate-900">
+                  Temporary Employee Login Created 🔑
+                </DialogTitle>
+              </div>
+            </DialogHeader>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 text-xs">
+              <div>
+                <span className="text-slate-500 block text-[11px]">Employee Name &amp; Email:</span>
+                <strong className="text-slate-900 text-sm block">{createdLoginInfo.name}</strong>
+                <span className="text-slate-600 font-mono text-xs">{createdLoginInfo.email}</span>
+              </div>
+
+              <div className="pt-2 border-t border-slate-200">
+                <span className="text-slate-500 block text-[11px] mb-1.5 font-semibold">Temporary Password:</span>
+                <div className="flex items-center justify-between gap-2 p-2.5 bg-indigo-50/90 rounded-xl border border-indigo-200">
+                  <code className="text-sm font-mono font-bold text-indigo-700 tracking-wider">
+                    {createdLoginInfo.temporaryPassword}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        navigator.clipboard.writeText(createdLoginInfo.temporaryPassword || "");
+                        setCopiedPassword(true);
+                        setTimeout(() => setCopiedPassword(false), 2000);
+                      } catch {}
+                    }}
+                    className="px-3 py-1 text-xs font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition active:scale-95"
+                  >
+                    {copiedPassword ? "Copied! ✓" : "Copy"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 space-y-1 leading-relaxed">
+              <strong className="block text-amber-950 font-bold">📌 How the flow works:</strong>
+              <p>1. Provide this Temporary Password to the employee.</p>
+              <p>2. Employee inputs their email &amp; this temporary password on the Login page (<code>/login</code>).</p>
+              <p>3. Once the temporary password is verified, the system gives them the option to <strong>Create their own permanent password</strong>.</p>
+              <p>4. For all future logins, the employee will sign in using their newly created password.</p>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button onClick={() => setCreatedLoginInfo(null)} className="bg-slate-900 hover:bg-slate-800 text-white w-full sm:w-auto">
+                Done
+              </Button>
             </div>
           </div>
         </Dialog>

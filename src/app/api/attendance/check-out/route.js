@@ -4,8 +4,15 @@ import { auditLog } from "../../../../lib/audit";
 import { getTodayKey } from "../../../../lib/attendance";
 import { readStore, writeStore } from "../../../../lib/store";
 
-function resolveEmployeeId(authUser, payload) {
-  if (authUser.role === "EMPLOYEE") return authUser.employeeId;
+function resolveEmployeeId(authUser, payload, store) {
+  if (authUser.role === "EMPLOYEE") {
+    if (authUser.employeeId) return authUser.employeeId;
+    const match = (store.employees || []).find((c) =>
+      (c.userId && c.userId === authUser.userId) ||
+      (c.email && String(c.email).toLowerCase() === String(authUser.email || "").toLowerCase())
+    );
+    return match?.id || null;
+  }
   return typeof payload?.employeeId === "string" ? payload.employeeId : null;
 }
 
@@ -20,10 +27,10 @@ export async function POST(request) {
     // optional payload
   }
 
-  const employeeId = resolveEmployeeId(auth.user, payload);
+  const store = await readStore();
+  const employeeId = resolveEmployeeId(auth.user, payload, store);
   if (!employeeId) return NextResponse.json({ error: "employeeId is required for this account." }, { status: 400 });
 
-  const store = await readStore();
   const today = getTodayKey();
   const attendance = store.attendance || [];
   const index = attendance.findIndex((record) => record.employeeId === employeeId && record.date === today);
@@ -41,14 +48,22 @@ export async function POST(request) {
   const durationMilliseconds = Math.max(0, checkOutAt.getTime() - checkInAt.getTime());
   const totalWorkHours = Number((durationMilliseconds / (1000 * 60 * 60)).toFixed(2));
 
-  // Duty is 8 hours. Overtime is any time beyond 8 hours.
+  // Office duty standard: 09:00 AM – 05:00 PM (8.0 hours).
+  // Overtime is any time worked beyond 8 hours.
   const dutyHours = 8;
   const overtimeHours = totalWorkHours > dutyHours ? Number((totalWorkHours - dutyHours).toFixed(2)) : 0;
 
-  let finalStatus = attendance[index].status;
-  if (totalWorkHours < 4) {
-    finalStatus = "half_day";
-  }
+  // Rate calculation strictly based on standard 30-day Basic Salary
+  const employee = (store.employees || []).find((e) => e.id === employeeId);
+  const salary = Number(employee?.salary || 0);
+  const perDayRate = salary > 0 ? salary / 30 : 0;
+  const hourlyRate = perDayRate > 0 ? perDayRate / 8 : 0;
+  const overtimeRate = hourlyRate * 1.5;
+  const overtimePay = overtimeHours > 0 ? Math.round(overtimeHours * overtimeRate) : 0;
+
+  // Status reflects actual arrival & work:
+  // No arbitrary half_day cut for small minutes; duty pay is strictly proportional to hours worked.
+  const finalStatus = attendance[index].isLate ? "late" : (totalWorkHours < 8 ? "partial" : "present");
 
   const updated = {
     ...attendance[index],
@@ -56,6 +71,7 @@ export async function POST(request) {
     totalWorkHours,
     dutyHours,
     overtimeHours,
+    overtimePay,
     status: finalStatus,
   };
 

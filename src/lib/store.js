@@ -420,7 +420,47 @@ export async function readStore() {
         const dbAI = aiRes.ok && Array.isArray(aiRes.data) ? aiRes.data : [];
 
         // If database has records, use database. If database is fresh but local has records, backfill!
-        const finalUsers = dbUsers.length > 0 ? dbUsers : (local.users || []);
+        let finalUsers = dbUsers.length > 0 ? dbUsers : (local.users || []);
+        
+        // Ensure Admin and HR accounts exist and have clean portal names (no personal names)
+        const hasAdmin = finalUsers.some((u) => String(u.email || "").toLowerCase() === "admin@example.com");
+        const hasHR = finalUsers.some((u) => String(u.email || "").toLowerCase() === "hr@example.com");
+
+        finalUsers = finalUsers.map((u) => {
+          const emailLower = String(u.email || "").toLowerCase();
+          if (emailLower === "admin@example.com") {
+            return { ...u, name: "Admin Portal", role: "ADMIN" };
+          }
+          if (emailLower === "hr@example.com") {
+            return { ...u, name: "HR Portal", role: "HR" };
+          }
+          return u;
+        });
+
+        if (!hasAdmin) {
+          finalUsers.push({
+            id: "usr-admin-default",
+            name: "Admin Portal",
+            email: "admin@example.com",
+            role: "ADMIN",
+            employeeId: null,
+            isActive: true,
+            createdAt: new Date().toISOString(),
+          });
+        }
+
+        if (!hasHR) {
+          finalUsers.push({
+            id: "usr-hr-default",
+            name: "HR Portal",
+            email: "hr@example.com",
+            role: "HR",
+            employeeId: null,
+            isActive: true,
+            createdAt: new Date().toISOString(),
+          });
+        }
+
         const finalEmployees = dbEmployees.length > 0 ? dbEmployees : (local.employees || []);
         const finalAttendance = dbAttendance.length > 0 ? dbAttendance : (local.attendance || []);
         const finalLeaves = dbLeaves.length > 0 ? dbLeaves : (local.leaves || []);
@@ -428,7 +468,7 @@ export async function readStore() {
 
         const store = {
           configured: configRow?.configured ?? local.configured ?? true,
-          company: configRow?.company || local.company || { name: "Saylani Tech" },
+          company: configRow?.company || local.company || { name: "HCM Lite Workspace" },
           office: configRow?.office || local.office || {},
           users: finalUsers,
           employees: finalEmployees,

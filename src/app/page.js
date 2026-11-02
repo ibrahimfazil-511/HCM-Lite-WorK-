@@ -95,31 +95,7 @@ export default function Home() {
               <span className="text-slate-300 font-medium text-[11px]">Supabase Cloud Connected</span>
             </div>
 
-            {/* Current Auth Pill if logged in */}
-            {identity && (
-              <div className="flex items-center gap-1.5 sm:gap-2 rounded-xl sm:rounded-2xl border border-slate-700/80 bg-slate-900/90 p-1 sm:p-1.5 sm:pr-3 shadow-md max-w-[160px] sm:max-w-none">
-                <span className="grid h-6 w-6 sm:h-7 sm:w-7 place-items-center rounded-lg sm:rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-[10px] sm:text-[11px] font-black text-white shrink-0">
-                  {identity.role.slice(0, 2)}
-                </span>
-                <div className="text-left leading-none min-w-0">
-                  <span className="block text-[10px] sm:text-[11px] font-bold text-white truncate max-w-[80px] sm:max-w-[120px]">
-                    {identity.name || identity.role}
-                  </span>
-                  <span className="text-[8px] sm:text-[9px] font-bold text-indigo-400 uppercase tracking-wider block">
-                    {identity.role}
-                  </span>
-                </div>
-                <button
-                  onClick={handleSignOut}
-                  title="Sign Out"
-                  className="ml-0.5 sm:ml-1 p-1 text-slate-400 hover:text-rose-400 transition"
-                >
-                  <IconLogOut className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
-            {/* Login Link - ALWAYS visible */}
+            {/* Login / Portal Link */}
             <a
               href="/login"
               className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-3 sm:px-4 py-2 text-xs font-bold text-white shadow-md shadow-indigo-600/30 hover:from-indigo-500 hover:to-purple-500 transition active:scale-95 shrink-0"
@@ -327,7 +303,7 @@ export default function Home() {
 
         {/* Footer */}
         <footer className="pt-8 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 text-center sm:text-left">
-          <span>© 2026 Saylani Tech HCM Lite. Real-time dynamic Human Capital Management.</span>
+          <span>© 2026 HCM Lite. Real-time dynamic Human Capital Management.</span>
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
             <span>Supabase Cloud PostgreSQL Live</span>
