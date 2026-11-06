@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { calculateLateHours } from "./attendance.js";
+import { calculateLateHours, getEarlyMinutes, getLateMinutes, getOvertimeMinutes } from "./attendance.js";
 
 export function isValidPayrollMonth(month) {
   return typeof month === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(month.trim());
@@ -62,8 +62,12 @@ export function generateMonthly30DayRecord(employee, month, store) {
     let status = "absent";
     let statusLabel = "Absent (Cut)";
     let dutyHours = 0;
+    let lateMinutes = 0;
     let lateHours = 0;
     let lateCut = 0;
+    let earlyMinutes = 0;
+    let earlyHours = 0;
+    let earlyCut = 0;
     let overtimeHours = 0;
     let overtimePay = 0;
     let absentCut = 0;
@@ -72,25 +76,30 @@ export function generateMonthly30DayRecord(employee, month, store) {
     if (record) {
       dutyHours = Number(record.totalWorkHours || 0);
 
-      // Overtime if duty exceeds standard 8.0 hours
-      const ot = Number(record.overtimeHours || (dutyHours > 8 ? dutyHours - 8 : 0));
+      // Overtime starts after the configured office end time.
+      const ot = record.checkOutAt
+        ? getOvertimeMinutes(record.checkOutAt, store.office) / 60
+        : Number(record.overtimeHours || 0);
       overtimeHours = ot > 0 ? Number(ot.toFixed(2)) : 0;
       overtimePay = roundMoney(overtimeHours * overtimeRate);
 
-      if (record.isLate || record.status === "late") {
-        const recLate = Number(record.lateHours);
-        const compLate = Number.isFinite(recLate) && recLate > 0
-          ? recLate
-          : (record.checkInAt ? calculateLateHours(record.checkInAt, store.office) : 1);
-        lateHours = compLate > 0 ? Number(compLate.toFixed(2)) : 1;
+      if (record.checkInAt) {
+        lateMinutes = getLateMinutes(record.checkInAt, store.office);
+        lateHours = Number((lateMinutes / 60).toFixed(2));
         lateCut = roundMoney(lateHours * hourlyRate);
       }
 
-      if (dutyHours >= 8.0) {
+      if (record.checkOutAt) {
+        earlyMinutes = getEarlyMinutes(record.checkOutAt, store.office);
+        earlyHours = Number((earlyMinutes / 60).toFixed(2));
+        earlyCut = roundMoney(earlyHours * hourlyRate);
+      }
+
+      if (dutyHours >= 8.0 || record.checkOutAt) {
         // Full duty completed
         status = lateHours > 0 ? "late" : "present";
         statusLabel = lateHours > 0 ? "Present (Late)" : "Full Duty (8h)";
-        dayNet = roundMoney(perDayRate - lateCut + overtimePay);
+        dayNet = roundMoney(Math.max(0, perDayRate - lateCut - earlyCut + overtimePay));
       } else if (dutyHours > 0) {
         // Partial/Short duty: Pay strictly according to exact hours/minutes worked!
         // "jaise 4 mint ki duty kari hai 4 mint ke paise milte"
@@ -98,7 +107,7 @@ export function generateMonthly30DayRecord(employee, month, store) {
         status = "partial";
         statusLabel = exactMinutes < 60 ? `Duty: ${exactMinutes} mins` : `Duty: ${dutyHours.toFixed(2)} hrs`;
         const dutyEarned = roundMoney(dutyHours * hourlyRate);
-        dayNet = roundMoney(dutyEarned);
+        dayNet = roundMoney(Math.max(0, dutyEarned - lateCut));
         // Shortage cut for the remaining hours of the 8-hour day
         const shortageHours = Math.max(0, 8 - dutyHours);
         absentCut = roundMoney(shortageHours * hourlyRate);
@@ -110,16 +119,10 @@ export function generateMonthly30DayRecord(employee, month, store) {
         dayNet = 0;
       }
     } else if (leave) {
-      if (String(leave.leaveType).toLowerCase() === "unpaid") {
-        status = "unpaid_leave";
-        statusLabel = "Unpaid Leave";
-        absentCut = perDayRate;
-        dayNet = 0;
-      } else {
-        status = "approved_leave";
-        statusLabel = `Approved ${leave.leaveType || "Paid"} Leave`;
-        dayNet = perDayRate; // 100% paid
-      }
+      status = "unpaid_leave";
+      statusLabel = `Leave (${leave.leaveType || "approved"})`;
+      absentCut = perDayRate;
+      dayNet = 0;
     } else if (isFuture) {
       // Future date that hasn't arrived yet! Do NOT mark absent, do NOT deduct!
       status = "upcoming";
@@ -152,7 +155,11 @@ export function generateMonthly30DayRecord(employee, month, store) {
       checkOutAt: record?.checkOutAt || null,
       dutyHours: Number(dutyHours.toFixed(2)),
       lateHours,
+      lateMinutes,
       lateCut,
+      earlyHours,
+      earlyMinutes,
+      earlyCut,
       overtimeHours,
       overtimePay,
       absentCut,
@@ -199,14 +206,15 @@ export function calculatePayrollForEmployee(employee, month, store) {
   let presentDays = 0;
   let lateDays = 0;
   let totalLateHours = 0;
+  let totalLateMinutes = 0;
   let totalWorkHours = 0;
   let totalOvertimeHours = 0;
   let overtimePay = 0;
   let lateDeduction = 0;
+  let earlyDeduction = 0;
   let absentDays = 0;
   let absentDeduction = 0;
   let totalDayEarnings = 0;
-  let paidLeaveDays = 0;
   let unpaidLeaveDays = 0;
 
   for (const day of monthlyRecords) {
@@ -218,8 +226,10 @@ export function calculatePayrollForEmployee(employee, month, store) {
       if (day.status === "late") {
         lateDays += 1;
         totalLateHours += day.lateHours;
+        totalLateMinutes += day.lateMinutes;
         lateDeduction += day.lateCut;
       }
+      earlyDeduction += day.earlyCut;
       totalOvertimeHours += day.overtimeHours;
       overtimePay += day.overtimePay;
       totalDayEarnings += day.dayEarned;
@@ -230,11 +240,11 @@ export function calculatePayrollForEmployee(employee, month, store) {
       if (day.lateHours > 0) {
         lateDays += 1;
         totalLateHours += day.lateHours;
+        totalLateMinutes += day.lateMinutes;
+        lateDeduction += day.lateCut;
       }
+      earlyDeduction += day.earlyCut;
       absentDeduction += day.absentCut;
-      totalDayEarnings += day.dayEarned;
-    } else if (day.status === "approved_leave") {
-      paidLeaveDays += 1;
       totalDayEarnings += day.dayEarned;
     } else if (day.status === "unpaid_leave") {
       unpaidLeaveDays += 1;
@@ -247,13 +257,15 @@ export function calculatePayrollForEmployee(employee, month, store) {
   }
 
   totalLateHours = Number(totalLateHours.toFixed(2));
+  totalLateMinutes = Math.round(totalLateMinutes);
   totalWorkHours = Number(totalWorkHours.toFixed(2));
   totalOvertimeHours = Number(totalOvertimeHours.toFixed(2));
   overtimePay = roundMoney(overtimePay);
   lateDeduction = roundMoney(lateDeduction);
+  earlyDeduction = roundMoney(earlyDeduction);
   absentDeduction = roundMoney(absentDeduction);
 
-  const totalDeductions = roundMoney(absentDeduction + lateDeduction);
+  const totalDeductions = roundMoney(absentDeduction + lateDeduction + earlyDeduction);
 
   let netPay = 0;
   let gross = 0;
@@ -262,11 +274,14 @@ export function calculatePayrollForEmployee(employee, month, store) {
     // Past completed month: Gross = Basic + Overtime, Net = Gross - Deductions
     gross = roundMoney(basic + overtimePay);
     netPay = roundMoney(Math.max(0, gross - totalDeductions));
+  } else if (month === currentMonthStr) {
+    // Current month: only completed attendance records earn salary.
+    // Absent, leave, pending, and future days must not receive accrued pay.
+    netPay = roundMoney(Math.max(0, totalDayEarnings));
+    gross = roundMoney(netPay + totalDeductions);
   } else {
-    // Current month in progress: Net Pay is the actual earned salary so far!
-    // E.g. If 4 minutes worked on Day 1, netPay is exactly the 4 minutes duty pay!
-    netPay = roundMoney(totalDayEarnings);
-    gross = roundMoney(basic + overtimePay);
+    gross = 0;
+    netPay = 0;
   }
 
   return {
@@ -282,14 +297,17 @@ export function calculatePayrollForEmployee(employee, month, store) {
     hourlyRate,
     overtimeRate,
     presentDays,
-    approvedPaidLeaves: paidLeaveDays,
+    approvedPaidLeaves: 0,
+    leaveDays: unpaidLeaveDays,
     unpaidLeaveDays,
     absentDays,
     halfDays: 0,
     lateDays,
     totalLateHours,
+    totalLateMinutes,
     lateRate: hourlyRate, // hourly rate cut per late hour
     lateDeduction,
+    earlyDeduction,
     absentDeduction,
     totalWorkHours,
     totalOvertimeHours,
@@ -313,13 +331,14 @@ export function createPayrollDraft(month, store, actorId) {
       basic: result.basic + line.basic,
       overtimePay: result.overtimePay + line.overtimePay,
       lateDeduction: result.lateDeduction + line.lateDeduction,
+      earlyDeduction: result.earlyDeduction + line.earlyDeduction,
       absentDeduction: result.absentDeduction + line.absentDeduction,
       gross: result.gross + line.gross,
       deductions: result.deductions + line.totalDeductions,
       tax: 0,
       netPay: result.netPay + line.netPay,
     }),
-    { basic: 0, overtimePay: 0, lateDeduction: 0, absentDeduction: 0, gross: 0, deductions: 0, tax: 0, netPay: 0 }
+    { basic: 0, overtimePay: 0, lateDeduction: 0, earlyDeduction: 0, absentDeduction: 0, gross: 0, deductions: 0, tax: 0, netPay: 0 }
   );
 
   return {

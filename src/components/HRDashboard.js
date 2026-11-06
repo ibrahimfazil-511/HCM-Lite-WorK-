@@ -116,7 +116,7 @@ export default function HRDashboard() {
   const [csvLoading, setCsvLoading] = useState(false);
 
   // Payroll draft form
-  const [payrollMonth, setPayrollMonth] = useState("2026-10");
+  const [payrollMonth, setPayrollMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [runningPayroll, setRunningPayroll] = useState(false);
   const [payrollViewMode, setPayrollViewMode] = useState("individual"); // "summary" | "individual"
   const [payrollEmployeeFilter, setPayrollEmployeeFilter] = useState("all");
@@ -177,41 +177,26 @@ export default function HRDashboard() {
     try {
       const token = localStorage.getItem("hcm_token");
       if (!token) {
-        window.location.assign("/login");
+        window.location.assign("/");
         return;
       }
       const headers = { Authorization: `Bearer ${token}` };
-      const [employeeResponse, attendanceResponse, leaveResponse, payrollResponse, announcementsResponse] = await Promise.all([
-        fetch("/api/employees?page=1&pageSize=100", { headers, cache: "no-store" }),
-        fetch("/api/attendance", { headers, cache: "no-store" }),
-        fetch("/api/leaves", { headers, cache: "no-store" }),
-        fetch("/api/payroll", { headers, cache: "no-store" }),
-        fetch("/api/announcements", { headers, cache: "no-store" }),
-      ]);
+      const dashboardResponse = await fetch("/api/dashboard", { headers, cache: "no-store" });
 
-      if ([employeeResponse, attendanceResponse, leaveResponse].some((r) => r && r.status === 401)) {
+      if (dashboardResponse.status === 401) {
         localStorage.removeItem("hcm_token");
-        window.location.assign("/login?redirect=/hr");
+        window.location.assign("/?redirect=/hr");
         return;
       }
 
-      const [employeeData, attendanceData, leaveData, payrollData, annData] = await Promise.all([
-        safeResponseJson(employeeResponse, { employees: [] }),
-        safeResponseJson(attendanceResponse, { attendance: [] }),
-        safeResponseJson(leaveResponse, { leaves: [] }),
-        safeResponseJson(payrollResponse, { payrolls: [] }),
-        safeResponseJson(announcementsResponse, { announcements: [] }),
-      ]);
-
-      const failed = [employeeResponse, attendanceResponse, leaveResponse].find((response) => response && !response.ok);
-      if (failed) throw new Error(employeeData?.error || attendanceData?.error || leaveData?.error || "Unable to load HR data.");
-
-      setEmployees(employeeData?.employees || []);
-      setAttendance(attendanceData?.attendance || []);
-      setLeaves(leaveData?.leaves || []);
-      setPayrolls(payrollData?.payrolls || []);
-      setAnnouncements(annData?.announcements || []);
-      loadAnalytics(dateRange, selectedDepartment);
+      const dashboardData = await safeResponseJson(dashboardResponse, {});
+      if (!dashboardResponse.ok) throw new Error(dashboardData?.error || "Unable to load HR data.");
+      setEmployees(dashboardData?.employees || []);
+      setAttendance(dashboardData?.attendance || []);
+      setLeaves(dashboardData?.leaves || []);
+      setPayrolls(dashboardData?.payrolls || []);
+      setAnnouncements(dashboardData?.announcements || []);
+      setAnalytics(dashboardData?.analytics || null);
     } catch (loadError) {
       setError(loadError.message);
     } finally {
@@ -496,7 +481,7 @@ export default function HRDashboard() {
 
   function logout() {
     localStorage.removeItem("hcm_token");
-    window.location.assign("/login");
+    window.location.assign("/");
   }
 
   if (!mounted) {
@@ -1447,13 +1432,14 @@ export default function HRDashboard() {
                                   +{(line.overtimePay || 0).toLocaleString()} PKR
                                 </TableCell>
                                 <TableCell className="font-mono text-rose-600 font-semibold">
-                                  -{(line.lateDeduction || 0).toLocaleString()} PKR ({line.totalLateHours || line.lateDays || 0}h late)
+                                  -{(Number(line.lateDeduction || 0) + Number(line.earlyDeduction || 0)).toLocaleString()} PKR ({line.totalLateHours || line.lateDays || 0}h late / early)
                                 </TableCell>
                                 <TableCell className="font-mono text-rose-600 font-semibold">
                                   -{(line.absentDeduction || 0).toLocaleString()} PKR ({line.absentDays || 0} abs)
                                 </TableCell>
                                 <TableCell className="font-mono font-bold text-indigo-700">
                                   {(line.netPay || 0).toLocaleString()} PKR
+                                  {Number(line.netPay || 0) === 0 && <span className="block text-[10px] text-rose-500">No payable attendance</span>}
                                 </TableCell>
                                 <TableCell className="text-right">
                                   <button
@@ -1624,7 +1610,7 @@ export default function HRDashboard() {
                                             {line.totalLateHours || 0} Hours Late ({line.lateDays || 0} late days)
                                           </td>
                                           <td className="py-2.5 px-4 text-right font-bold text-rose-700 font-mono">
-                                            -{Number(line.lateDeduction || 0).toLocaleString()} PKR
+                                            -{(Number(line.lateDeduction || 0) + Number(line.earlyDeduction || 0)).toLocaleString()} PKR
                                           </td>
                                         </tr>
                                       </tbody>
@@ -1671,7 +1657,7 @@ export default function HRDashboard() {
                                               <th className="py-2.5 px-3">Check-In</th>
                                               <th className="py-2.5 px-3">Check-Out</th>
                                               <th className="py-2.5 px-3">Duty Hours</th>
-                                              <th className="py-2.5 px-3 text-rose-400">Late Hours Cut (-)</th>
+                                              <th className="py-2.5 px-3 text-rose-400">Late / Early Cut (-)</th>
                                               <th className="py-2.5 px-3 text-emerald-400">Overtime (+)</th>
                                               <th className="py-2.5 px-3 text-right">Day Net Earning</th>
                                             </tr>
@@ -1679,7 +1665,7 @@ export default function HRDashboard() {
                                           <tbody className="divide-y divide-slate-800/60 font-medium">
                                             {(line.monthlyRecords && line.monthlyRecords.length > 0 ? line.monthlyRecords : (() => {
                                               const days = [];
-                                              const m = run.month || "2026-10";
+                                              const m = run.month || new Date().toISOString().slice(0, 7);
                                               const todayStr = new Date().toISOString().slice(0, 10);
                                               for (let i = 1; i <= 30; i++) {
                                                 const dStr = `${m}-${String(i).padStart(2, "0")}`;
@@ -1762,7 +1748,7 @@ export default function HRDashboard() {
                                                       ) : "—"}
                                                 </td>
                                                 <td className="py-2 px-3 font-mono font-bold text-rose-400">
-                                                  {!day.isUpcoming && day.lateHours > 0 ? `-${day.lateCut.toLocaleString()} PKR (${day.lateHours}h)` : <span className="text-slate-600 font-normal">—</span>}
+                                                  {!day.isUpcoming && (day.lateCut > 0 || day.earlyCut > 0) ? `-${(Number(day.lateCut || 0) + Number(day.earlyCut || 0)).toLocaleString()} PKR (${day.lateHours || 0}h late, ${day.earlyHours || 0}h early)` : <span className="text-slate-600 font-normal">—</span>}
                                                 </td>
                                                 <td className="py-2 px-3 font-mono font-bold text-emerald-400">
                                                   {!day.isUpcoming && day.overtimeHours > 0 ? `+${day.overtimePay.toLocaleString()} PKR (${day.overtimeHours}h)` : <span className="text-slate-600 font-normal">—</span>}
@@ -2279,11 +2265,11 @@ export default function HRDashboard() {
 
                   {/* Late Penalty Cut (Exact Hourly Cut) */}
                   <tr className="bg-rose-50/25">
-                    <td className="py-2 px-3 font-bold text-rose-800">Late Arrival Cut (-)</td>
+                    <td className="py-2 px-3 font-bold text-rose-800">Late / Early Cut (-)</td>
                     <td className="py-2 px-3 text-rose-700 font-mono">Hourly Cut: Basic ÷ 30 ÷ 8</td>
                     <td className="py-2 px-3 text-rose-800 font-mono">{activePayslip.totalLateHours || 0} hrs late ({activePayslip.lateDays || 0} days)</td>
                     <td className="py-2 px-3 text-right font-bold text-rose-700 font-mono">
-                      -{Number(activePayslip.lateDeduction || 0).toLocaleString()} PKR
+                      -{(Number(activePayslip.lateDeduction || 0) + Number(activePayslip.earlyDeduction || 0)).toLocaleString()} PKR
                     </td>
                   </tr>
                 </tbody>
@@ -2365,7 +2351,7 @@ export default function HRDashboard() {
             <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 space-y-1 leading-relaxed">
               <strong className="block text-amber-950 font-bold">📌 How the flow works:</strong>
               <p>1. Provide this Temporary Password to the employee.</p>
-              <p>2. Employee inputs their email &amp; this temporary password on the Login page (<code>/login</code>).</p>
+              <p>2. Employee opens the sign-in page, enters their email and this temporary password, then creates a permanent password.</p>
               <p>3. Once the temporary password is verified, the system gives them the option to <strong>Create their own permanent password</strong>.</p>
               <p>4. For all future logins, the employee will sign in using their newly created password.</p>
             </div>

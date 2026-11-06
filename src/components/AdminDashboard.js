@@ -129,7 +129,7 @@ export default function AdminDashboard() {
   const [csvLoading, setCsvLoading] = useState(false);
 
   // Payroll draft form
-  const [payrollMonth, setPayrollMonth] = useState("2026-10");
+  const [payrollMonth, setPayrollMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [runningPayroll, setRunningPayroll] = useState(false);
   const [payrollViewMode, setPayrollViewMode] = useState("individual"); // "summary" | "individual"
   const [payrollEmployeeFilter, setPayrollEmployeeFilter] = useState("all");
@@ -223,53 +223,27 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem("hcm_token");
       if (!token) {
-        window.location.assign("/login");
+        window.location.assign("/");
         return;
       }
       const headers = { Authorization: `Bearer ${token}` };
-      const [employeeResponse, attendanceResponse, leaveResponse, setupResponse, payrollResponse, userResponse, supaResponse] = await Promise.all([
-        fetch("/api/employees?page=1&pageSize=100", { headers, cache: "no-store" }),
-        fetch("/api/attendance", { headers, cache: "no-store" }),
-        fetch("/api/leaves", { headers, cache: "no-store" }),
-        fetch("/api/setup", { cache: "no-store" }),
-        fetch("/api/payroll", { headers, cache: "no-store" }),
-        fetch("/api/users", { headers, cache: "no-store" }).catch(() => null),
-        fetch("/api/supabase/status", { cache: "no-store" }).catch(() => null),
-      ]);
+      const dashboardResponse = await fetch("/api/dashboard", { headers, cache: "no-store" });
 
-      if ([employeeResponse, attendanceResponse, leaveResponse].some((r) => r && r.status === 401)) {
+      if (dashboardResponse.status === 401) {
         localStorage.removeItem("hcm_token");
-        window.location.assign("/login?redirect=/dashboard");
+        window.location.assign("/?redirect=/dashboard");
         return;
       }
 
-      const [employeeData, attendanceData, leaveData, setupData, payrollData, userData, supaData] = await Promise.all([
-        safeResponseJson(employeeResponse, { employees: [] }),
-        safeResponseJson(attendanceResponse, { attendance: [] }),
-        safeResponseJson(leaveResponse, { leaves: [] }),
-        safeResponseJson(setupResponse, { company: null }),
-        safeResponseJson(payrollResponse, { payrolls: [] }),
-        safeResponseJson(userResponse, { users: [] }),
-        safeResponseJson(supaResponse, null),
-      ]);
-
-      if (supaData?.connection) {
-        setSupabaseStatus({
-          connected: Boolean(supaData.connection.connected),
-          usersCount: supaData.connection.usersCount || 0,
-          employeesCount: supaData.connection.employeesCount || 0,
-          tables: supaData.connection.tables || [],
-        });
-      }
-      const failed = [employeeResponse, attendanceResponse, leaveResponse].find((response) => response && !response.ok);
-      if (failed) throw new Error(employeeData?.error || attendanceData?.error || leaveData?.error || "Unable to load dashboard data.");
-      setEmployees(employeeData?.employees || []);
-      setAttendance(attendanceData?.attendance || []);
-      setLeaves(leaveData?.leaves || []);
-      setPayrolls(payrollData?.payrolls || []);
-      setUsers(userData?.users || []);
-      setCompany(setupData?.company || null);
-      loadAnalytics(dateRange, selectedDepartment);
+      const dashboardData = await safeResponseJson(dashboardResponse, {});
+      if (!dashboardResponse.ok) throw new Error(dashboardData?.error || "Unable to load dashboard data.");
+      setEmployees(dashboardData?.employees || []);
+      setAttendance(dashboardData?.attendance || []);
+      setLeaves(dashboardData?.leaves || []);
+      setPayrolls(dashboardData?.payrolls || []);
+      setUsers(dashboardData?.users || []);
+      setCompany(dashboardData?.company || null);
+      setAnalytics(dashboardData?.analytics || null);
     } catch (loadError) {
       setError(loadError.message);
     } finally {
@@ -567,7 +541,7 @@ export default function AdminDashboard() {
 
   function logout() {
     localStorage.removeItem("hcm_token");
-    window.location.assign("/login");
+    window.location.assign("/");
   }
 
   if (!mounted) {
@@ -582,7 +556,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50 text-slate-800 antialiased font-sans">
+    <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-800 antialiased font-sans">
       {/* Mobile Drawer Backdrop Overlay */}
       {mobileMenuOpen && (
         <div
@@ -596,7 +570,7 @@ export default function AdminDashboard() {
       {/* SIDEBAR NAVIGATION                                       */}
       {/* -------------------------------------------------------- */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 max-w-[85vw] flex-col border-r border-slate-200/80 bg-white/95 backdrop-blur-md transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex h-screen max-h-screen w-64 max-w-[85vw] shrink-0 flex-col overflow-hidden border-r border-slate-200/80 bg-white/95 backdrop-blur-md transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${
           mobileMenuOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
         }`}
       >
@@ -635,7 +609,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Nav Items */}
-        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
+        <div className="min-h-0 flex-1 overflow-hidden px-3 py-2 space-y-1">
           <span className="px-3 text-[10px] font-bold tracking-wider uppercase text-slate-400">Workspace</span>
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
@@ -740,7 +714,7 @@ export default function AdminDashboard() {
       {/* -------------------------------------------------------- */}
       {/* MAIN CONTENT AREA                                        */}
       {/* -------------------------------------------------------- */}
-      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+      <div className="flex h-screen min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {/* Top Header Navbar */}
         <header className="sticky top-0 z-30 flex h-16 sm:h-20 items-center justify-between border-b border-slate-200/80 bg-white/90 px-4 sm:px-6 lg:px-8 backdrop-blur-md">
           <div className="flex items-center gap-3 sm:gap-4 min-w-0">
@@ -2114,11 +2088,9 @@ export default function AdminDashboard() {
                                           <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px]">
                                             Basic: <strong className="text-slate-900 font-bold">{Number(line.basic || 0).toLocaleString()} PKR</strong>
                                           </span>
-                                          <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px]">
-                                            30-Day Base | Daily: <strong className="text-indigo-700 font-bold">{dailyRate.toLocaleString()} PKR</strong>
-                                          </span>
-                                          <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px]">
-                                            Hourly: <strong className="text-indigo-700 font-bold">{hourlyRate.toLocaleString()} PKR</strong>
+                                          <span className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px]">
+                                            Actual Payable: <strong className="text-emerald-700 font-bold">{Number(line.netPay || 0).toLocaleString()} PKR</strong>
+                                            {Number(line.netPay || 0) === 0 && <span className="block text-[10px] text-rose-500">No payable attendance</span>}
                                           </span>
                                           <button
                                             type="button"
@@ -2130,7 +2102,7 @@ export default function AdminDashboard() {
                                             }`}
                                           >
                                             <span>📅</span>
-                                            <span>{is30DayExpanded ? "Hide 30-Day Table" : "Poore Month Ka 30-Day Record Table"}</span>
+                                            <span>{is30DayExpanded ? "Hide 30-Day Salary" : "View 30-Day Salary"}</span>
                                           </button>
                                           <Button
                                             variant="outline"
@@ -2143,8 +2115,12 @@ export default function AdminDashboard() {
                                         </div>
                                       </div>
 
-                                      {/* Individual Detailed Calculation Table */}
-                                      <div className="overflow-x-auto">
+                                      <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs">
+                                        <span className="font-semibold text-slate-600">Total salary after attendance and leave deductions</span>
+                                        <strong className="font-mono text-base text-emerald-700">{Number(line.netPay || 0).toLocaleString()} PKR</strong>
+                                      </div>
+
+                                      {false && <div className="overflow-x-auto">
                                         <table className="w-full text-left text-xs divide-y divide-slate-100">
                                           <thead>
                                             <tr className="bg-slate-50/80 text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -2252,7 +2228,7 @@ export default function AdminDashboard() {
                                             </tr>
                                           </tfoot>
                                         </table>
-                                      </div>
+                                      </div>}
 
                                       {/* POORE MONTH KA 30-DAY RECORD TABLE */}
                                       {is30DayExpanded && (
@@ -2282,7 +2258,7 @@ export default function AdminDashboard() {
                                                   <th className="py-2.5 px-3">Check-In</th>
                                                   <th className="py-2.5 px-3">Check-Out</th>
                                                   <th className="py-2.5 px-3">Duty Hours</th>
-                                                  <th className="py-2.5 px-3 text-rose-400">Late Hours Cut (-)</th>
+                                                  <th className="py-2.5 px-3 text-rose-400">Late / Early Cut (-)</th>
                                                   <th className="py-2.5 px-3 text-emerald-400">Overtime (+)</th>
                                                   <th className="py-2.5 px-3 text-right">Day Net Earning</th>
                                                 </tr>
@@ -2290,7 +2266,7 @@ export default function AdminDashboard() {
                                               <tbody className="divide-y divide-slate-800/60 font-medium">
                                                 {(line.monthlyRecords && line.monthlyRecords.length > 0 ? line.monthlyRecords : (() => {
                                                   const days = [];
-                                                  const m = payroll.month || "2026-10";
+                                                  const m = payroll.month || new Date().toISOString().slice(0, 7);
                                                   const todayStr = new Date().toISOString().slice(0, 10);
                                                   for (let i = 1; i <= 30; i++) {
                                                     const dStr = `${m}-${String(i).padStart(2, "0")}`;
@@ -2329,7 +2305,7 @@ export default function AdminDashboard() {
                                                         st = "absent"; stLbl = "0 hrs duty"; abCut = dailyRate;
                                                       }
                                                     } else if (lv) {
-                                                      st = "approved_leave"; stLbl = `Approved ${lv.leaveType} Leave`; dEarned = dailyRate;
+                                                      st = "unpaid_leave"; stLbl = `Leave (${lv.leaveType || "approved"})`; abCut = dailyRate; dEarned = 0;
                                                     } else if (isFuture) {
                                                       st = "upcoming"; stLbl = "Upcoming Date"; abCut = 0; dEarned = 0;
                                                     } else if (isToday) {
@@ -2337,7 +2313,7 @@ export default function AdminDashboard() {
                                                     } else {
                                                       abCut = dailyRate;
                                                     }
-                                                    days.push({ day: i, date: dStr, dayOfWeek, status: st, statusLabel: stLbl, checkInAt: rec?.checkInAt, checkOutAt: rec?.checkOutAt, dutyHours: dutyH, lateHours: ltH, lateCut: ltCut, overtimeHours: otH, overtimePay: otPay, absentCut: abCut, dayEarned: dEarned, isUpcoming: isFuture });
+                                                    days.push({ day: i, date: dStr, dayOfWeek, status: st, statusLabel: stLbl, checkInAt: rec?.checkInAt, checkOutAt: rec?.checkOutAt, dutyHours: dutyH, lateHours: ltH, lateCut: ltCut, earlyHours: 0, earlyCut: 0, overtimeHours: otH, overtimePay: otPay, absentCut: abCut, dayEarned: dEarned, isUpcoming: isFuture });
                                                   }
                                                   return days;
                                                 })()).map((day) => (
@@ -2373,7 +2349,7 @@ export default function AdminDashboard() {
                                                       ) : "—"}
                                                     </td>
                                                     <td className="py-2 px-3 font-mono font-bold text-rose-400">
-                                                      {!day.isUpcoming && day.lateHours > 0 ? `-${day.lateCut.toLocaleString()} PKR (${day.lateHours}h)` : <span className="text-slate-600 font-normal">—</span>}
+                                                      {!day.isUpcoming && (day.lateCut > 0 || day.earlyCut > 0) ? `-${(Number(day.lateCut || 0) + Number(day.earlyCut || 0)).toLocaleString()} PKR (${day.lateMinutes || 0} min late, ${day.earlyHours || 0}h early)` : <span className="text-slate-600 font-normal">—</span>}
                                                     </td>
                                                     <td className="py-2 px-3 font-mono font-bold text-emerald-400">
                                                       {!day.isUpcoming && day.overtimeHours > 0 ? `+${day.overtimePay.toLocaleString()} PKR (${day.overtimeHours}h)` : <span className="text-slate-600 font-normal">—</span>}
@@ -2395,16 +2371,16 @@ export default function AdminDashboard() {
                                               <tfoot className="sticky bottom-0 bg-slate-900 border-t-2 border-indigo-500 font-bold">
                                                 <tr>
                                                   <td colSpan={5} className="py-3 px-3 text-slate-300 text-xs font-bold uppercase tracking-wider">
-                                                    Month Total ({payroll.month}): {line.presentDays || 0} Present · {line.approvedPaidLeaves || 0} Leaves · {line.absentDays || 0} Absents · {line.totalLateHours || 0}h Late · {line.totalOvertimeHours || 0}h OT
+                                                    Month Total ({payroll.month}): {line.presentDays || 0} Present · {line.leaveDays || 0} Leaves · {line.absentDays || 0} Absents · {line.totalLateMinutes || 0} min Late · {line.totalOvertimeHours || 0}h OT
                                                   </td>
                                                   <td className="py-3 px-3 text-rose-400 font-mono text-xs">
-                                                    Late: -{Number(line.lateDeduction || 0).toLocaleString()} PKR
+                                                    Late: -{Number(line.lateDeduction || 0).toLocaleString()} PKR ({line.totalLateMinutes || 0} min)
                                                   </td>
                                                   <td className="py-3 px-3 text-emerald-400 font-mono text-xs">
                                                     OT: +{Number(line.overtimePay || 0).toLocaleString()} PKR
                                                   </td>
                                                   <td className="py-3 px-3 text-right font-mono text-sm text-emerald-400 font-black">
-                                                    Total Net: {Number(line.netPay || 0).toLocaleString()} PKR
+                                                    Total Salary: {Number(line.netPay || 0).toLocaleString()} PKR
                                                   </td>
                                                 </tr>
                                               </tfoot>
@@ -2906,11 +2882,11 @@ export default function AdminDashboard() {
 
                   {/* Late Penalty Cut (Exact Hourly Cut) */}
                   <tr className="bg-rose-50/25">
-                    <td className="py-2 px-3 font-bold text-rose-800">Late Arrival Cut (-)</td>
+                    <td className="py-2 px-3 font-bold text-rose-800">Late / Early Cut (-)</td>
                     <td className="py-2 px-3 text-rose-700 font-mono">Hourly Cut: Basic ÷ 30 ÷ 8</td>
-                    <td className="py-2 px-3 text-rose-800 font-mono">{activePayslip.totalLateHours || 0} hrs late ({activePayslip.lateDays || 0} days)</td>
+                    <td className="py-2 px-3 text-rose-800 font-mono">{activePayslip.totalLateHours || 0} hrs late + early checkout</td>
                     <td className="py-2 px-3 text-right font-bold text-rose-700 font-mono">
-                      -{Number(activePayslip.lateDeduction || 0).toLocaleString()} PKR
+                      -{(Number(activePayslip.lateDeduction || 0) + Number(activePayslip.earlyDeduction || 0)).toLocaleString()} PKR
                     </td>
                   </tr>
                 </tbody>
@@ -3073,7 +3049,7 @@ export default function AdminDashboard() {
             <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 space-y-1 leading-relaxed">
               <strong className="block text-amber-950 font-bold">📌 How the flow works:</strong>
               <p>1. Provide this Temporary Password to the employee.</p>
-              <p>2. Employee inputs their email &amp; this temporary password on the Login page (<code>/login</code>).</p>
+              <p>2. Employee opens the sign-in page, enters their email and this temporary password, then creates a permanent password.</p>
               <p>3. Once the temporary password is verified, the system prompts them to <strong>Create their own permanent password</strong>.</p>
               <p>4. For all future logins, the employee will sign in using their newly created password.</p>
             </div>

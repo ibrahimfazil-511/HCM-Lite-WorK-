@@ -1,15 +1,20 @@
 import { NextResponse } from "next/server";
 import { authenticate } from "../../../../lib/auth";
 import { auditLog } from "../../../../lib/audit";
-import { getTodayKey } from "../../../../lib/attendance";
+import { getTodayKey, getOvertimeMinutes } from "../../../../lib/attendance";
 import { readStore, writeStore } from "../../../../lib/store";
 
 function resolveEmployeeId(authUser, payload, store) {
-  if (authUser.role === "EMPLOYEE") {
-    if (authUser.employeeId) return authUser.employeeId;
-    const match = (store.employees || []).find((c) =>
-      (c.userId && c.userId === authUser.userId) ||
-      (c.email && String(c.email).toLowerCase() === String(authUser.email || "").toLowerCase())
+  if (String(authUser.role || "").toUpperCase() === "EMPLOYEE") {
+    const employees = store.employees || [];
+    const tokenEmployeeId = String(authUser.employeeId || "").trim();
+    if (tokenEmployeeId && employees.some((employee) => String(employee.id) === tokenEmployeeId)) {
+      return tokenEmployeeId;
+    }
+
+    const match = employees.find((employee) =>
+      (employee.userId && String(employee.userId) === String(authUser.userId || "")) ||
+      (employee.email && String(employee.email).toLowerCase() === String(authUser.email || "").toLowerCase())
     );
     return match?.id || null;
   }
@@ -48,10 +53,10 @@ export async function POST(request) {
   const durationMilliseconds = Math.max(0, checkOutAt.getTime() - checkInAt.getTime());
   const totalWorkHours = Number((durationMilliseconds / (1000 * 60 * 60)).toFixed(2));
 
-  // Office duty standard: 09:00 AM – 05:00 PM (8.0 hours).
-  // Overtime is any time worked beyond 8 hours.
+  // Office duty standard: 09:00 AM - 05:00 PM (8.0 hours).
+  // Overtime starts after the office end time.
   const dutyHours = 8;
-  const overtimeHours = totalWorkHours > dutyHours ? Number((totalWorkHours - dutyHours).toFixed(2)) : 0;
+  const overtimeHours = Number((getOvertimeMinutes(checkOutAt, store.office) / 60).toFixed(2));
 
   // Rate calculation strictly based on standard 30-day Basic Salary
   const employee = (store.employees || []).find((e) => e.id === employeeId);

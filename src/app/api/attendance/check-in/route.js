@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { authenticate } from "../../../../lib/auth";
 import { auditLog } from "../../../../lib/audit";
-import { getTodayKey, isLate, calculateLateHours } from "../../../../lib/attendance";
+import { getTodayKey, isLate, getLateMinutes, calculateLateHours } from "../../../../lib/attendance";
 import { readStore, writeStore } from "../../../../lib/store";
 
 function authResponse(auth) {
@@ -62,6 +62,7 @@ export async function POST(request) {
   }
 
   const late = isLate(now, store.office);
+  const lateMinutes = late ? getLateMinutes(now, store.office) : 0;
   const lateHours = late ? calculateLateHours(now, store.office) : 0;
   const record = {
     id: randomUUID(),
@@ -73,6 +74,7 @@ export async function POST(request) {
     totalWorkHours: 0,
     overtimeHours: 0,
     lateHours: lateHours,
+    lateMinutes,
     dutyHours: 8,
     isLate: Boolean(late),
   };

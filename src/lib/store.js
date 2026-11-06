@@ -21,6 +21,9 @@ const isServerless = Boolean(
 
 // In-memory runtime cache for serverless containers
 let memoryStore = null;
+let liveStoreCache = null;
+let liveStoreCacheExpiresAt = 0;
+const STORE_CACHE_TTL_MS = 5000;
 
 const emptyStore = {
   configured: false,
@@ -37,6 +40,13 @@ const emptyStore = {
   auditLogs: [],
   aiLogs: [],
 };
+
+function isDemoRecord(record) {
+  const id = String(record?.id || "").toLowerCase();
+  const email = String(record?.email || "").toLowerCase();
+  const name = String(record?.name || "").toLowerCase();
+  return id.startsWith("test-") || email.includes("test.employee") || name === "test employee";
+}
 
 function parseOrRepairJson(raw) {
   if (!raw || typeof raw !== "string") return null;
@@ -177,6 +187,7 @@ function sanitizeAttendance(a) {
     checkOutAt: a.checkOutAt ? new Date(a.checkOutAt).toISOString() : null,
     status: String(a.status || "present"),
     totalWorkHours: Number(a.totalWorkHours) || 0,
+    lateMinutes: Number(a.lateMinutes) || 0,
     distanceMeters: Number(a.distanceMeters) || 0,
     checkOutDistanceMeters: Number(a.checkOutDistanceMeters) || 0,
     isManualOverride: Boolean(a.isManualOverride),
@@ -360,6 +371,10 @@ function unmapPayroll(p) {
  * Prefers Supabase live data; falls back to local cache gracefully.
  */
 export async function readStore() {
+  if (liveStoreCache && Date.now() < liveStoreCacheExpiresAt) {
+    return structuredClone(liveStoreCache);
+  }
+
   let local;
   try {
     local = await readLocalStore();
@@ -382,16 +397,16 @@ export async function readStore() {
         auditRes,
         aiRes,
       ] = await Promise.all([
-        supabaseGet("company_settings"),
-        supabaseGet("users"),
-        supabaseGet("employees"),
-        supabaseGet("attendance"),
-        supabaseGet("leaves"),
-        supabaseGet("payrolls"),
-        supabaseGet("announcements"),
-        supabaseGet("notifications"),
-        supabaseGet("audit_logs"),
-        supabaseGet("ai_logs"),
+        supabaseGet("company_settings", "select=id,configured,company,office,updatedAt&limit=1"),
+        supabaseGet("users", "select=id,name,email,passwordHash,role,employeeId,mustChangePassword,isTempPassword,isActive,createdAt&limit=1000"),
+        supabaseGet("employees", "select=id,userId,name,email,department,salary,phone,address,designation,bankDetails,isActive,createdAt,updatedAt&limit=1000"),
+        supabaseGet("attendance", "select=id,employeeId,date,checkInAt,checkOutAt,status,totalWorkHours,overtimeHours,dutyHours,isLate,distanceMeters,checkOutDistanceMeters,isManualOverride,remarks,createdAt&limit=5000"),
+        supabaseGet("leaves", "select=id,employeeId,leaveType,startDate,endDate,days,workingDays,reason,status,approvedBy,rejectionReason,hrComment,appliedBy,appliedAt,updatedAt,createdAt&limit=2000"),
+        supabaseGet("payrolls", "select=id,month,year,status,finalizedAt,finalizedBy,items,lines,totals,totalGross,totalNet,createdBy,createdAt&limit=1000"),
+        supabaseGet("announcements", "select=id,title,content,audience,priority,createdBy,publishedAt,createdAt,updatedAt&limit=500"),
+        supabaseGet("notifications", "select=id,userId,type,title,message,announcementId,priority,readAt,createdAt&limit=2000"),
+        supabaseGet("audit_logs", "select=id,actorId,action,entity,before,after,createdAt&limit=5000"),
+        supabaseGet("ai_logs", "select=id,userId,userRole,query,toolUsed,replyPreview,createdAt&limit=1000"),
       ]);
 
       if (settingsRes.ok || usersRes.ok) {
@@ -402,7 +417,7 @@ export async function readStore() {
         const rawEmployees = employeesRes.ok && Array.isArray(employeesRes.data) ? employeesRes.data.map(unmapEmployee) : [];
 
         // Ensure passwordHash is never lost if Supabase table column casing differs
-        const dbUsers = rawUsers.map((u) => {
+        const dbUsers = rawUsers.filter((u) => !isDemoRecord(u)).map((u) => {
           if (!u.passwordHash) {
             const match = (local.users || []).find((lu) => (lu.email || "").toLowerCase() === (u.email || "").toLowerCase());
             if (match?.passwordHash) u.passwordHash = match.passwordHash;
@@ -410,9 +425,16 @@ export async function readStore() {
           return u;
         });
 
-        const dbEmployees = rawEmployees;
-        const dbAttendance = attendanceRes.ok && Array.isArray(attendanceRes.data) ? attendanceRes.data.map(unmapAttendance) : [];
-        const dbLeaves = leavesRes.ok && Array.isArray(leavesRes.data) ? leavesRes.data.map(unmapLeave) : [];
+        const dbEmployees = rawEmployees.filter((employee) => !isDemoRecord(employee));
+        const demoEmployeeIds = new Set(
+          (rawEmployees.filter((employee) => isDemoRecord(employee))).map((employee) => employee.id)
+        );
+        const dbAttendance = attendanceRes.ok && Array.isArray(attendanceRes.data)
+          ? attendanceRes.data.map(unmapAttendance).filter((record) => !demoEmployeeIds.has(record.employeeId))
+          : [];
+        const dbLeaves = leavesRes.ok && Array.isArray(leavesRes.data)
+          ? leavesRes.data.map(unmapLeave).filter((leave) => !demoEmployeeIds.has(leave.employeeId))
+          : [];
         const dbPayrolls = payrollsRes.ok && Array.isArray(payrollsRes.data) ? payrollsRes.data.map(unmapPayroll) : [];
         const dbAnnouncements = announcementsRes.ok && Array.isArray(announcementsRes.data) ? announcementsRes.data : [];
         const dbNotifications = notificationsRes.ok && Array.isArray(notificationsRes.data) ? notificationsRes.data : [];
@@ -420,7 +442,7 @@ export async function readStore() {
         const dbAI = aiRes.ok && Array.isArray(aiRes.data) ? aiRes.data : [];
 
         // If database has records, use database. If database is fresh but local has records, backfill!
-        let finalUsers = dbUsers.length > 0 ? dbUsers : (local.users || []);
+        let finalUsers = dbUsers.length > 0 ? dbUsers : (local.users || []).filter((user) => !isDemoRecord(user));
         
         // Ensure Admin and HR accounts exist and have clean portal names (no personal names)
         const hasAdmin = finalUsers.some((u) => String(u.email || "").toLowerCase() === "admin@example.com");
@@ -461,9 +483,16 @@ export async function readStore() {
           });
         }
 
-        const finalEmployees = dbEmployees.length > 0 ? dbEmployees : (local.employees || []);
-        const finalAttendance = dbAttendance.length > 0 ? dbAttendance : (local.attendance || []);
-        const finalLeaves = dbLeaves.length > 0 ? dbLeaves : (local.leaves || []);
+        const demoLocalEmployeeIds = new Set(
+          (local.employees || []).filter((employee) => isDemoRecord(employee)).map((employee) => employee.id)
+        );
+        const finalEmployees = dbEmployees.length > 0 ? dbEmployees : (local.employees || []).filter((employee) => !isDemoRecord(employee));
+        const finalAttendance = dbAttendance.length > 0
+          ? dbAttendance
+          : (local.attendance || []).filter((record) => !demoLocalEmployeeIds.has(record.employeeId));
+        const finalLeaves = dbLeaves.length > 0
+          ? dbLeaves
+          : (local.leaves || []).filter((leave) => !demoLocalEmployeeIds.has(leave.employeeId));
         const finalPayrolls = dbPayrolls.length > 0 ? dbPayrolls : (local.payrolls || []);
 
         const store = {
@@ -484,6 +513,8 @@ export async function readStore() {
 
         // Cache fresh data locally
         writeLocalStore(store).catch(() => {});
+        liveStoreCache = structuredClone(store);
+        liveStoreCacheExpiresAt = Date.now() + STORE_CACHE_TTL_MS;
         return store;
       }
     } catch (err) {
@@ -491,6 +522,8 @@ export async function readStore() {
     }
   }
 
+  liveStoreCache = structuredClone(local);
+  liveStoreCacheExpiresAt = Date.now() + STORE_CACHE_TTL_MS;
   return local;
 }
 
@@ -499,6 +532,8 @@ export async function readStore() {
  * Persists locally and automatically pushes sanitized, schema-compliant rows to Supabase tables.
  */
 export async function writeStore(store) {
+  liveStoreCache = null;
+  liveStoreCacheExpiresAt = 0;
   // 1. Write locally / update memory store safely without throwing
   try {
     await writeLocalStore(store);

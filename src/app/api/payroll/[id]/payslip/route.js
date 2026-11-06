@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { authenticate } from "../../../../../lib/auth";
+import { createPayrollDraft } from "../../../../../lib/payroll";
 import { readStore } from "../../../../../lib/store";
 
 export async function GET(request, { params }) {
@@ -9,9 +10,15 @@ export async function GET(request, { params }) {
   const store = await readStore();
   const payroll = (store.payrolls || []).find((candidate) => candidate.id === id);
   if (!payroll) return NextResponse.json({ error: "Payroll not found." }, { status: 404 });
+  const effectivePayroll = {
+    ...createPayrollDraft(payroll.month, store, payroll.createdBy),
+    id: payroll.id,
+    status: payroll.status,
+    createdAt: payroll.createdAt,
+  };
 
   const employeeId = new URL(request.url).searchParams.get("employeeId") || auth.user.employeeId;
-  const line = payroll.lines.find((candidate) => candidate.employeeId === employeeId);
+  const line = effectivePayroll.lines.find((candidate) => candidate.employeeId === employeeId);
   if (!line) return NextResponse.json({ error: "Payslip not found." }, { status: 404 });
 
   if (auth.user.role === "EMPLOYEE" && employeeId !== auth.user.employeeId) {
@@ -32,7 +39,7 @@ export async function GET(request, { params }) {
       `Department:            ${line.department}`,
       `Working Days:          30 Days (Standard Monthly Base)`,
       `Present Days:          ${line.presentDays || 0} days`,
-      `Approved Paid Leaves:  ${line.approvedPaidLeaves || 0} days (100% Paid)`,
+      `Leave Days Deduction:  ${line.leaveDays || 0} days @ ${(line.basic / 30 || 0).toLocaleString()} PKR/day`,
       `Unpaid / Absent Days:  ${line.absentDays || 0} days`,
       `Late Arrivals:         ${line.lateDays || 0} days (${line.totalLateHours || 0} hrs late)`,
       `-------------------------------------------------------------`,
@@ -53,7 +60,7 @@ export async function GET(request, { params }) {
       `=============================================================`,
       `TOTAL PAYABLE AMOUNT (NET SALARY): ${(line.netPay || 0).toLocaleString()} PKR`,
       `=============================================================`,
-      `Payroll Status:        ${payroll.status.toUpperCase()}`,
+      `Payroll Status:        ${effectivePayroll.status.toUpperCase()}`,
       `Generated At:          ${line.generatedAt || new Date().toISOString()}`,
     ].join("\n");
 
@@ -66,7 +73,7 @@ export async function GET(request, { params }) {
   }
 
   return NextResponse.json({
-    payroll: { id: payroll.id, month: payroll.month, status: payroll.status },
+    payroll: { id: effectivePayroll.id, month: effectivePayroll.month, status: effectivePayroll.status },
     payslip: line,
   });
 }

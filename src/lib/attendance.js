@@ -28,25 +28,57 @@ export function getTodayKey(date = new Date()) {
 export function getLateThreshold(office) {
   const [hours, minutes] = String(office?.startTime || "09:00").split(":").map(Number);
   const startMinutes = (Number.isFinite(hours) ? hours : 9) * 60 + (Number.isFinite(minutes) ? minutes : 0);
-  return startMinutes + (Number.isFinite(Number(office?.graceMinutes)) ? Number(office.graceMinutes) : 15);
+  return startMinutes + (Number.isFinite(Number(office?.graceMinutes)) ? Number(office.graceMinutes) : 0);
+}
+
+function getLocalMinutes(date) {
+  const d = typeof date === "string" ? new Date(date) : date;
+  if (!d || Number.isNaN(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Karachi",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  return hour * 60 + minute;
 }
 
 export function isLate(date, office) {
-  return date.getHours() * 60 + date.getMinutes() > getLateThreshold(office);
+  return (getLocalMinutes(date) || 0) > getLateThreshold(office);
 }
 
 export function getLateMinutes(date, office) {
   const [hours, minutes] = String(office?.startTime || "09:00").split(":").map(Number);
   const startMinutes = (Number.isFinite(hours) ? hours : 9) * 60 + (Number.isFinite(minutes) ? minutes : 0);
-  const grace = Number.isFinite(Number(office?.graceMinutes)) ? Number(office.graceMinutes) : 15;
-  const d = typeof date === "string" ? new Date(date) : date;
-  if (!d || isNaN(d.getTime())) return 0;
-  const arrivalMinutes = d.getHours() * 60 + d.getMinutes();
-  if (arrivalMinutes <= startMinutes + grace) return 0;
-  return Math.max(0, arrivalMinutes - startMinutes);
+  const grace = Number.isFinite(Number(office?.graceMinutes)) ? Number(office.graceMinutes) : 0;
+  const arrivalMinutes = getLocalMinutes(date);
+  if (arrivalMinutes === null) return 0;
+  const graceEndMinutes = startMinutes + grace;
+  if (arrivalMinutes <= graceEndMinutes) return 0;
+  return Math.max(0, arrivalMinutes - graceEndMinutes);
 }
 
 export function calculateLateHours(date, office) {
   const lateMinutes = getLateMinutes(date, office);
   return Number((lateMinutes / 60).toFixed(2));
+}
+
+export function getOfficeEndMinutes(office) {
+  const [hours, minutes] = String(office?.endTime || "17:00").split(":").map(Number);
+  return (Number.isFinite(hours) ? hours : 17) * 60 + (Number.isFinite(minutes) ? minutes : 0);
+}
+
+export function getEarlyMinutes(date, office) {
+  const checkoutMinutes = getLocalMinutes(date);
+  if (checkoutMinutes === null) return 0;
+  return Math.max(0, getOfficeEndMinutes(office) - checkoutMinutes);
+}
+
+export function getOvertimeMinutes(date, office) {
+  const checkoutMinutes = getLocalMinutes(date);
+  if (checkoutMinutes === null) return 0;
+  return Math.max(0, checkoutMinutes - getOfficeEndMinutes(office));
 }

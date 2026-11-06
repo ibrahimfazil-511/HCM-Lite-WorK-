@@ -18,18 +18,18 @@ export async function POST(request) {
     }
 
     const requestedRole = typeof payload?.role === "string" ? payload.role.toUpperCase() : null;
-    const requestedPortal = typeof payload?.portal === "string" ? payload.portal : payload?.targetPortal;
 
     // 1. Admin Login: admin@example.com / SecPass123
     const isAdminMatch = email === "admin@example.com" && (password === "SecPass123" || password === "Admin123!");
     if (isAdminMatch) {
-      const isHrPortal = requestedRole === "HR" || requestedPortal === "/hr";
-      const role = isHrPortal ? "HR" : "ADMIN";
+      if (requestedRole && requestedRole !== "ADMIN") {
+        return NextResponse.json({ error: "These credentials do not belong to the selected role." }, { status: 403 });
+      }
       const identity = {
         userId: "admin-root-user",
-        role,
+        role: "ADMIN",
         employeeId: null,
-        name: role === "ADMIN" ? "Admin Portal" : "HR Portal",
+        name: "Admin Portal",
         email: "admin@example.com",
       };
       const token = createToken(identity);
@@ -49,6 +49,9 @@ export async function POST(request) {
     // 2. HR Login: hr@example.com / SecPass321
     const isHrMatch = email === "hr@example.com" && (password === "SecPass321" || password === "Admin123!");
     if (isHrMatch) {
+      if (requestedRole && requestedRole !== "HR") {
+        return NextResponse.json({ error: "These credentials do not belong to the selected role." }, { status: 403 });
+      }
       const identity = {
         userId: "hr-root-user",
         role: "HR",
@@ -73,6 +76,9 @@ export async function POST(request) {
     // 3. Employee Demo Login: ali.khan@example.com / Employee123!
     const isDemoEmployee = email === "ali.khan@example.com" && (password === "Employee123!" || password === "SecPass123");
     if (isDemoEmployee) {
+      if (requestedRole && requestedRole !== "EMPLOYEE") {
+        return NextResponse.json({ error: "These credentials do not belong to the selected role." }, { status: 403 });
+      }
       const store = await readStore();
       const userObj = (store.users || []).find((u) => String(u.email || "").toLowerCase() === "ali.khan@example.com");
       const identity = {
@@ -117,6 +123,9 @@ export async function POST(request) {
     }
 
     let role = String(user.role || "EMPLOYEE").toUpperCase();
+    if (requestedRole && requestedRole !== role) {
+      return NextResponse.json({ error: "These credentials do not belong to the selected role." }, { status: 403 });
+    }
     const employeeId = user.employeeId || user.employeeid || user.employee_id || null;
     
     // Anonymized role-based display name (never display personal name like Mohammad Asif in auth identity)

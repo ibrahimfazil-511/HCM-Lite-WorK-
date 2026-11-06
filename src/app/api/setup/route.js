@@ -48,7 +48,8 @@ export async function POST(request) {
     companyName,
     companyEmail,
     officeStart = "09:00",
-    graceMinutes = 15,
+    officeEnd = "17:00",
+    graceMinutes = 0,
     radiusMeters = 150,
     latitude,
     longitude,
@@ -63,7 +64,7 @@ export async function POST(request) {
   if (adminPassword.length < 8) {
     return NextResponse.json({ error: "Admin password must be at least 8 characters." }, { status: 400 });
   }
-  if (!/^\d{2}:\d{2}$/.test(officeStart) || !Number.isInteger(Number(graceMinutes)) || Number(graceMinutes) < 0 || !Number.isInteger(Number(radiusMeters)) || Number(radiusMeters) <= 0 || !isFiniteNumber(Number(latitude)) || !isFiniteNumber(Number(longitude))) {
+  if (!/^\d{2}:\d{2}$/.test(officeStart) || !/^\d{2}:\d{2}$/.test(officeEnd) || !Number.isInteger(Number(graceMinutes)) || Number(graceMinutes) < 0 || !Number.isInteger(Number(radiusMeters)) || Number(radiusMeters) <= 0 || !isFiniteNumber(Number(latitude)) || !isFiniteNumber(Number(longitude))) {
     return NextResponse.json({ error: "Office settings must contain valid time, radius, and coordinates." }, { status: 400 });
   }
 
@@ -80,6 +81,7 @@ export async function POST(request) {
     company: { id: randomUUID(), name: companyName.trim(), email: companyEmail.trim().toLowerCase() },
     office: {
       startTime: officeStart,
+      endTime: officeEnd,
       graceMinutes: Number(graceMinutes),
       radiusMeters: Number(radiusMeters),
       latitude: Number(latitude),
@@ -98,5 +100,5 @@ export async function POST(request) {
   };
 
   await writeStore(store);
-  return NextResponse.json({ configured: true, redirectTo: "/login" }, { status: 201 });
+  return NextResponse.json({ configured: true, redirectTo: "/" }, { status: 201 });
 }

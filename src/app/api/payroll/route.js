@@ -12,7 +12,16 @@ export async function GET(request) {
   const auth = await authenticate(request, ["ADMIN", "HR", "EMPLOYEE"]);
   if (!auth.ok) return authResponse(auth);
   const store = await readStore();
-  let payrolls = store.payrolls || [];
+  let payrolls = (store.payrolls || []).map((payroll) => {
+    const recalculated = createPayrollDraft(payroll.month, store, payroll.createdBy);
+    return {
+      ...recalculated,
+      id: payroll.id,
+      status: payroll.status,
+      createdAt: payroll.createdAt,
+      createdBy: payroll.createdBy,
+    };
+  });
   if (auth.user.role === "EMPLOYEE") {
     payrolls = payrolls.map((payroll) => ({
       ...payroll,

@@ -104,35 +104,24 @@ export default function EmployeePage() {
       }
       const headers = { Authorization: `Bearer ${token}` };
 
-      const [attRes, leaveRes, payRes, empRes, dashRes] = await Promise.all([
-        fetch("/api/attendance", { headers, cache: "no-store" }),
-        fetch("/api/leaves", { headers, cache: "no-store" }),
-        fetch("/api/payroll", { headers, cache: "no-store" }),
-        fetch("/api/employees", { headers, cache: "no-store" }),
-        fetch("/api/analytics/dashboard", { headers, cache: "no-store" }),
-      ]);
+      const dashboardRes = await fetch("/api/dashboard", { headers, cache: "no-store" });
 
-      if ([attRes, leaveRes, payRes, empRes, dashRes].some((response) => response && response.status === 401)) {
+      if (dashboardRes.status === 401) {
         clearClientSession();
         window.location.assign("/login?redirect=/employee");
         return;
       }
 
-      const [attData, leaveData, payData, empData, dashData] = await Promise.all([
-        safeResponseJson(attRes, { attendance: [] }),
-        safeResponseJson(leaveRes, { leaves: [] }),
-        safeResponseJson(payRes, { payrolls: [] }),
-        safeResponseJson(empRes, { employees: [] }),
-        safeResponseJson(dashRes, {}),
-      ]);
+      const dashboardData = await safeResponseJson(dashboardRes, {});
+      if (!dashboardRes.ok) throw new Error(dashboardData?.error || "Failed to load employee portal.");
 
-      setAttendance(attData?.attendance || []);
-      setLeaves(leaveData?.leaves || []);
-      setPayrolls(payData?.payrolls || []);
-      setEmployeeDashboard(dashData?.employee || null);
+      setAttendance(dashboardData?.attendance || []);
+      setLeaves(dashboardData?.leaves || []);
+      setPayrolls(dashboardData?.payrolls || []);
+      setEmployeeDashboard(dashboardData?.analytics?.employee || null);
 
-      if (empData?.employees && empData.employees.length > 0) {
-        const myEmp = empData.employees[0];
+      if (dashboardData?.employees && dashboardData.employees.length > 0) {
+        const myEmp = dashboardData.employees[0];
         setProfile(myEmp);
         setProfileForm({ phone: myEmp.phone || "", address: myEmp.address || "" });
       }
@@ -189,7 +178,7 @@ export default function EmployeePage() {
       const response = await fetch(`/api/attendance/${action}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ employeeId: getClientIdentity()?.employeeId || undefined }),
       });
       const result = await safeResponseJson(response, {});
       if (!response.ok) throw new Error(result.error || "Attendance action failed.");
